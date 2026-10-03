@@ -5,7 +5,7 @@ let lowCv = null, viewCtx = null;
 
 function resize() {
   const cv = $('view');
-  const w = Math.max(320, window.innerWidth - SIDEBAR_W), h = window.innerHeight;
+  const w = Math.max(160, window.innerWidth - SIDEBAR_W), h = window.innerHeight;
   cv.style.width = w + 'px'; cv.style.height = h + 'px';
   cv.width = w; cv.height = h;
   R.w = Math.ceil(w / SCALE); R.h = Math.ceil(h / SCALE);

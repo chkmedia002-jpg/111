@@ -1,0 +1,3050 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>鋼鐵黎明 2050</title>
+<style>
+* { box-sizing: border-box; }
+:root { color-scheme: dark; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #07090b; color: #d8dde2;
+  font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif; user-select: none; }
+.hidden { display: none !important; }
+
+#game { position: fixed; inset: 0; display: flex; }
+#view { display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
+
+#msg { position: fixed; left: 12px; top: 10px; pointer-events: none; font-size: 15px; }
+#msg div { color: #9fffb0; text-shadow: 0 0 4px #000, 1px 1px 0 #000; margin-bottom: 3px; transition: opacity .6s; letter-spacing: 1px; }
+#msg div.fade { opacity: 0; }
+
+/* ===== 側邊欄 ===== */
+#sidebar { width: 268px; flex: none; height: 100%; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px;
+  background: linear-gradient(90deg, #1b2026, #262d35 40%, #1b2026); border-left: 3px solid #3c4650;
+  box-shadow: inset 1px 0 0 #59646f; }
+#sb-head { background: #0c0f12; border: 2px solid #444f5a; border-radius: 3px; padding: 4px 8px; text-align: center; }
+#credits { font: bold 22px "Consolas", monospace; color: #ffd24a; text-shadow: 0 0 6px rgba(255,190,40,.5); }
+#minimap { width: 244px; height: 122px; background: #000; border: 2px solid #444f5a; image-rendering: pixelated; cursor: pointer; }
+#tabs { display: flex; gap: 3px; }
+#tabs button { flex: 1; padding: 5px 0; background: linear-gradient(#3a434d, #262d35); color: #cfd6dc; border: 1px solid #56616c;
+  border-radius: 2px; cursor: pointer; font: 14px inherit; font-family: inherit; }
+#tabs button.active { background: linear-gradient(#5a6b7c, #34404c); color: #fff; border-color: #9fb3c6; }
+#tabs button.flash { animation: flash 0.8s infinite; }
+@keyframes flash { 50% { background: #8a7a20; color: #fff; } }
+
+#sb-mid { flex: 1; display: flex; gap: 6px; min-height: 0; }
+#powercol { width: 16px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+#powerbar { position: relative; flex: 1; width: 12px; background: #0b0d10; border: 1px solid #4a545e; }
+#power-fill { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(#5f5, #1a1); transition: height .3s; }
+#power-fill.warn { background: linear-gradient(#ff5, #aa2); }
+#power-fill.low { background: linear-gradient(#f55, #a11); animation: flash 0.8s infinite; }
+#power-use { position: absolute; left: -3px; right: -3px; height: 2px; background: #fff; box-shadow: 0 0 3px #fff; }
+#power-txt { font-size: 9px; writing-mode: vertical-rl; color: #9aa; height: 60px; }
+
+#buildgrid { flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr; grid-auto-rows: 66px; gap: 4px; overflow-y: auto; align-content: start; }
+.item { position: relative; border: 1px solid #56616c; background: #111; cursor: pointer; overflow: hidden; }
+.item canvas { width: 100%; height: 48px; display: block; image-rendering: pixelated; }
+.item .prog { position: absolute; left: 0; top: 0; right: 0; height: 48px; pointer-events: none; }
+.item .nm { font-size: 10px; text-align: center; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #1a1f24; color: #cfd6dc; }
+.item .cnt { position: absolute; right: 3px; top: 1px; font: bold 13px monospace; color: #fff; text-shadow: 1px 1px 0 #000; }
+.item .rdy { display: none; position: absolute; left: 0; right: 0; top: 16px; text-align: center; font: bold 13px inherit; color: #6f6; text-shadow: 0 0 3px #000, 1px 1px 0 #000; }
+.item.ready .rdy { display: block; animation: flash2 0.8s infinite; }
+.item.paused .prog::after { content: '暫停'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fd5; font-size: 12px; text-shadow: 1px 1px 0 #000; }
+.item.busy, .item.locked { filter: grayscale(1) brightness(.45); }
+.item.locked { cursor: not-allowed; }
+.item:hover { border-color: #cde; }
+@keyframes flash2 { 50% { opacity: .35; } }
+
+#tools { display: flex; gap: 3px; }
+#tools button, #tools select { background: linear-gradient(#3a434d, #262d35); color: #cfd6dc; border: 1px solid #56616c; border-radius: 2px;
+  padding: 4px 6px; cursor: pointer; font-family: inherit; font-size: 12px; }
+#tools button.on { background: #6a5a10; color: #fff; border-color: #fd5; }
+#info { min-height: 64px; background: #0c0f12; border: 1px solid #3c4650; padding: 5px 8px; font-size: 12px; line-height: 1.5; }
+.dim { color: #778; }
+
+/* ===== 覆蓋層 ===== */
+.overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.72); z-index: 10; }
+#menu { background: radial-gradient(ellipse at center, #1a2430 0%, #05070a 75%); }
+.panel { background: linear-gradient(#1e252d, #12171c); border: 2px solid #4a5662; box-shadow: 0 0 40px rgba(0,0,0,.8), inset 0 0 0 1px #6b7a88;
+  padding: 26px 34px; max-width: 760px; width: 92%; border-radius: 4px; }
+.panel.small { max-width: 420px; text-align: center; }
+.panel h1 { margin: 0 0 10px; font-size: 38px; letter-spacing: 6px; color: #e8edf2; text-shadow: 0 0 12px rgba(120,180,255,.5); }
+.panel h1 span { color: #ff4050; text-shadow: 0 0 14px rgba(255,40,60,.7); }
+.panel h1.win { color: #6f6; } .panel h1.lose { color: #f55; }
+.story { line-height: 1.7; color: #aeb8c2; font-size: 14px; }
+.factions { display: flex; gap: 16px; margin: 16px 0; }
+.faction { flex: 1; border: 2px solid #3c4650; padding: 12px 16px; cursor: pointer; background: #12171c; border-radius: 3px; transition: .15s; }
+.faction:hover { border-color: #7a8794; }
+.faction.sel { border-color: #ffd24a; box-shadow: 0 0 14px rgba(255,210,74,.3); }
+.faction h2 { margin: 6px 0 0; font-size: 20px; }
+.faction small { color: #889; }
+.faction p { font-size: 13px; color: #b8c2cc; line-height: 1.6; }
+.faction ul { margin: 0; padding-left: 18px; font-size: 12px; color: #9aa6b2; }
+.flag { height: 8px; border-radius: 2px; }
+.flag.ac { background: linear-gradient(90deg, #2f7fff, #9cc8ff); }
+.flag.ep { background: linear-gradient(90deg, #e0392b, #ffb0a8); }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.row select { margin-left: 8px; background: #12171c; color: #dde; border: 1px solid #56616c; padding: 6px; font-family: inherit; }
+button#start, button#again { background: linear-gradient(#b02a2a, #6a1414); color: #fff; border: 1px solid #ff6a6a; padding: 10px 34px;
+  font-size: 18px; letter-spacing: 4px; cursor: pointer; font-family: inherit; border-radius: 3px; }
+button#start:hover, button#again:hover { filter: brightness(1.2); }
+.hint { color: #7d8894; font-size: 12px; margin-top: 14px; }
+#help table { width: 100%; border-collapse: collapse; font-size: 14px; }
+#help td { padding: 5px 8px; border-bottom: 1px solid #2c343c; }
+#help td:first-child { color: #ffd24a; white-space: nowrap; }
+
+#super { background: #0c0f12; border: 1px solid #5a4a20; padding: 4px 6px; cursor: default; }
+#super .sname { font-size: 12px; color: #fd5; margin-bottom: 3px; }
+#super .sbar { height: 6px; background: #222; }
+#super .sfill { height: 100%; background: linear-gradient(90deg, #a60, #fd5); }
+#super.ready { cursor: pointer; border-color: #fd5; animation: flash 1s infinite; }
+</style>
+</head>
+<body>
+<div id="game">
+  <canvas id="view"></canvas>
+  <div id="msg"></div>
+  <aside id="sidebar">
+    <div id="sb-head">
+      <div id="credits">$ 0</div>
+    </div>
+    <canvas id="minimap" width="240" height="120"></canvas>
+    <div id="tabs">
+      <button data-tab="bld">建築</button><button data-tab="def">防禦</button><button data-tab="inf">步兵</button><button data-tab="veh">載具</button>
+    </div>
+    <div id="sb-mid">
+      <div id="powercol">
+        <div id="powerbar"><div id="power-fill"></div><div id="power-use"></div></div>
+        <div id="power-txt"></div>
+      </div>
+      <div id="buildgrid"></div>
+    </div>
+    <div id="super" class="hidden" title="超級武器"></div>
+    <div id="tools">
+      <button id="btn-repair" title="修理建築">🔧 修理</button>
+      <button id="btn-sell" title="變賣建築(退還一半)">$ 變賣</button>
+      <select id="speed" title="遊戲速度">
+        <option value="0.75">慢速</option>
+        <option value="1" selected>正常</option>
+        <option value="1.5">快速</option>
+        <option value="2">極速</option>
+      </select>
+      <button id="btn-sound" title="音效開關">🔊</button>
+      <button id="btn-help" title="操作說明 (F1)">?</button>
+    </div>
+    <div id="info"></div>
+  </aside>
+</div>
+
+<div id="menu" class="overlay">
+  <div class="panel">
+    <h1>鋼鐵黎明 <span>2050</span></h1>
+    <p class="story">2050 年,稀土資源枯竭引爆全球危機。大西洋聯盟與歐亞協約為爭奪最後的稀土礦脈,
+      在中亞荒原爆發全面衝突。雷射與電磁砲取代了火藥,但戰爭的本質從未改變——<br><b>指揮官,選擇你的陣營。</b></p>
+    <div class="factions">
+      <div class="faction sel" data-f="ac">
+        <div class="flag ac"></div>
+        <h2>大西洋聯盟</h2>
+        <small>Atlantic Coalition</small>
+        <p>高能雷射武器與精密電子戰。單位精準、射速快,但裝甲較薄。</p>
+        <ul><li>赫利俄斯雷射戰車</li><li>日冕光束砲車</li><li>雷射防禦塔</li></ul>
+      </div>
+      <div class="faction" data-f="ep">
+        <div class="flag ep"></div>
+        <h2>歐亞協約</h2>
+        <small>Eurasian Pact</small>
+        <p>電磁軌道砲與重裝甲。單位厚重、火力強大,但速度較慢。</p>
+        <ul><li>雷神重型戰車</li><li>電磁軌道砲車</li><li>電磁砲塔</li></ul>
+      </div>
+    </div>
+    <div class="row">
+      <label>電腦難度
+        <select id="difficulty">
+          <option value="easy">簡單</option>
+          <option value="normal" selected>普通</option>
+          <option value="hard">困難</option>
+        </select>
+      </label>
+      <button id="start">開始作戰</button>
+    </div>
+    <p class="hint">目標:摧毀敵方所有建築。按 F1 查看操作說明。</p>
+  </div>
+</div>
+
+<div id="end" class="overlay hidden">
+  <div class="panel small">
+    <h1>勝利</h1>
+    <p></p>
+    <button id="again">返回主選單</button>
+  </div>
+</div>
+
+<div id="pause" class="overlay hidden"><div class="panel small"><h1>暫停</h1><p>按 P 繼續</p></div></div>
+
+<div id="help" class="overlay hidden">
+  <div class="panel">
+    <h1>操作說明</h1>
+    <table>
+      <tr><td>左鍵 / 拖曳</td><td>選取單位 / 框選</td></tr>
+      <tr><td>Shift + 左鍵</td><td>加選 / 取消選取</td></tr>
+      <tr><td>雙擊單位</td><td>選取畫面中同類單位</td></tr>
+      <tr><td>右鍵</td><td>移動 / 攻擊目標(採集車:指定礦區)</td></tr>
+      <tr><td>Ctrl + 右鍵</td><td>攻擊移動(沿途交戰)</td></tr>
+      <tr><td>工程師 + 右鍵建築</td><td>佔領敵方建築 / 修好己方建築</td></tr>
+      <tr><td>超級武器面板</td><td>充能完成後點擊,再左鍵選擇地圖目標</td></tr>
+      <tr><td>選取兵營/工廠 + 右鍵</td><td>設定集結點</td></tr>
+      <tr><td>方向鍵 / 滑鼠移到邊緣 / 中鍵拖曳</td><td>移動視角</td></tr>
+      <tr><td>小地圖</td><td>左鍵移動視角,右鍵下令移動</td></tr>
+      <tr><td>Ctrl + 1~9 / 1~9</td><td>編組 / 叫出編組(連按兩下跳至該處)</td></tr>
+      <tr><td>Q / Ctrl + A</td><td>選取畫面中 / 全部戰鬥單位</td></tr>
+      <tr><td>S</td><td>停止</td></tr>
+      <tr><td>H / 空白鍵</td><td>回到基地 / 跳至最近警報</td></tr>
+      <tr><td>P / Tab / Esc</td><td>暫停 / 切換建造分頁 / 取消</td></tr>
+      <tr><td>側欄左鍵 / 右鍵</td><td>建造(Shift 一次 5 個)/ 暫停、取消</td></tr>
+    </table>
+    <p class="hint">建築完成後點擊「就緒」圖示,再於地圖上放置。電力不足時生產減速、防禦塔停擺。點任意處關閉。</p>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ===== 基本常數 =====
+const TW = 40, TH = 20;            // 等角磚塊尺寸(低解析度像素)
+const HW = TW / 2, HH = TH / 2;
+const MAP_W = 64, MAP_H = 64;
+const SCALE = 2;                   // 低解析度畫面放大倍率 → 像素風
+const BUILD_RADIUS = 5;            // 建築需距離己方建築幾格內
+const START_CREDITS = 5000;
+
+// ===== 陣營 =====
+const FACTIONS = {
+  ac: {
+    name: '大西洋聯盟', en: 'Atlantic Coalition',
+    color: '#2f7fff', beam: '#ff3048',
+    desc: '高能雷射武器與精密電子戰。單位精準、射速快,但裝甲較薄。'
+  },
+  ep: {
+    name: '歐亞協約', en: 'Eurasian Pact',
+    color: '#e0392b', beam: '#9fe3ff',
+    desc: '電磁軌道砲與重裝甲。單位厚重、火力強大,但速度較慢。'
+  }
+};
+
+// ===== 彈頭 vs 裝甲倍率 =====
+const WARHEADS = {
+  ap:    { inf: 1.0, light: 0.55, heavy: 0.25, bld: 0.25 },
+  at:    { inf: 0.3, light: 0.9,  heavy: 1.0,  bld: 0.6 },
+  laser: { inf: 0.8, light: 1.0,  heavy: 0.85, bld: 0.6 },
+  rail:  { inf: 0.6, light: 1.0,  heavy: 1.0,  bld: 0.8 },
+  siege: { inf: 0.6, light: 0.8,  heavy: 0.8,  bld: 1.5 }
+};
+
+// ===== 武器 =====
+// kind: bullet(曳光彈) / shell(砲彈) / missile(飛彈) / laser(雷射) / rail(電磁砲)
+const WEAPONS = {
+  pulseRifle:  { kind: 'bullet',  dmg: 16,  range: 4.2, rof: 0.9, wh: 'ap',    snd: 'gun',    color: '#aef' },
+  assaultRifle:{ kind: 'bullet',  dmg: 17,  range: 4.0, rof: 0.9, wh: 'ap',    snd: 'gun',    color: '#ffd27a' },
+  laserRifle:  { kind: 'laser',   dmg: 40,  range: 5.0, rof: 1.8, wh: 'laser', snd: 'laserS', width: 1 },
+  rocket:      { kind: 'missile', dmg: 55,  range: 5.5, rof: 2.2, wh: 'at',    snd: 'rocket', speed: 8 },
+  pulseGun:    { kind: 'bullet',  dmg: 14,  range: 5.0, rof: 0.45, wh: 'ap',   snd: 'gun',    color: '#aef' },
+  autocannon:  { kind: 'bullet',  dmg: 22,  range: 5.0, rof: 0.7, wh: 'ap',    snd: 'cannonS',color: '#ffcf6a' },
+  heliosLaser: { kind: 'laser',   dmg: 62,  range: 5.5, rof: 1.7, wh: 'laser', snd: 'laser',  width: 2 },
+  cannon125:   { kind: 'shell',   dmg: 85,  range: 5.2, rof: 2.2, wh: 'at',    snd: 'cannon', speed: 14, splash: 0.6 },
+  solarLance:  { kind: 'laser',   dmg: 150, range: 8.5, rof: 3.6, wh: 'siege', snd: 'laserB', width: 3, splash: 0.9 },
+  railgun:     { kind: 'rail',    dmg: 160, range: 8.5, rof: 3.8, wh: 'siege', snd: 'rail',   splash: 0.5 },
+  laserTurret: { kind: 'laser',   dmg: 60,  range: 7.0, rof: 1.3, wh: 'laser', snd: 'laser',  width: 2 },
+  railTurret:  { kind: 'rail',    dmg: 100, range: 7.0, rof: 2.4, wh: 'rail',  snd: 'rail' }
+};
+
+// ===== 單位 =====
+// cat: inf 步兵 / veh 載具
+const UNITS = {
+  harvester: { name: '稀土採集車', faction: null, cat: 'veh', cost: 1200, hp: 900, armor: 'heavy', speed: 1.5, sight: 4,
+    weapon: null, req: ['refinery'], harvester: true, look: { kind: 'harv', L: 1.0, W: 0.7, H: 7 },
+    desc: '自動採集稀土礦並運回精煉廠。' },
+
+  engineer: { name: '戰鬥工程師', faction: null, cat: 'inf', cost: 500, hp: 75, armor: 'inf', speed: 1.2, sight: 4,
+    weapon: null, req: ['barracks'], engineer: true, look: { kind: 'inf', gun: 'none' },
+    desc: '右鍵點敵方建築可佔領;點己方受損建築可立即修好。' },
+
+  ac_inf: { name: '脈衝步兵', faction: 'ac', cat: 'inf', cost: 150, hp: 100, armor: 'inf', speed: 1.25, sight: 5,
+    weapon: 'pulseRifle', req: ['barracks'], look: { kind: 'inf', gun: 'rifle' }, desc: '標準步兵,擅長對付步兵。' },
+  ac_laser: { name: '雷射突擊兵', faction: 'ac', cat: 'inf', cost: 350, hp: 110, armor: 'inf', speed: 1.2, sight: 5,
+    weapon: 'laserRifle', req: ['barracks'], look: { kind: 'inf', gun: 'laser' }, desc: '攜帶攜行式雷射,可對付載具。' },
+  ac_light: { name: '獵鷹偵察車', faction: 'ac', cat: 'veh', cost: 600, hp: 320, armor: 'light', speed: 3.2, sight: 7,
+    weapon: 'pulseGun', req: ['factory'], look: { kind: 'veh', L: 0.75, W: 0.5, H: 4, tur: 'mg', wheels: true }, desc: '高速偵察車,克制步兵。' },
+  ac_tank: { name: '赫利俄斯雷射戰車', faction: 'ac', cat: 'veh', cost: 950, hp: 560, armor: 'heavy', speed: 2.0, sight: 6,
+    weapon: 'heliosLaser', req: ['factory'], look: { kind: 'veh', L: 0.95, W: 0.65, H: 5, tur: 'laser' }, desc: '主力戰車,搭載高能雷射砲。' },
+  ac_art: { name: '日冕光束砲車', faction: 'ac', cat: 'veh', cost: 1600, hp: 420, armor: 'light', speed: 1.5, sight: 8,
+    weapon: 'solarLance', req: ['factory', 'tech'], look: { kind: 'veh', L: 1.05, W: 0.65, H: 5, tur: 'lance' }, desc: '超遠程聚焦光束,摧毀建築的利器。' },
+
+  ep_inf: { name: '突擊步兵', faction: 'ep', cat: 'inf', cost: 150, hp: 110, armor: 'inf', speed: 1.2, sight: 5,
+    weapon: 'assaultRifle', req: ['barracks'], look: { kind: 'inf', gun: 'rifle' }, desc: '標準步兵,擅長對付步兵。' },
+  ep_rocket: { name: '反坦克火箭兵', faction: 'ep', cat: 'inf', cost: 300, hp: 100, armor: 'inf', speed: 1.1, sight: 5,
+    weapon: 'rocket', req: ['barracks'], look: { kind: 'inf', gun: 'rocket' }, desc: '肩扛式導引飛彈,反裝甲專家。' },
+  ep_light: { name: '狼獾突擊車', faction: 'ep', cat: 'veh', cost: 650, hp: 380, armor: 'light', speed: 2.8, sight: 6,
+    weapon: 'autocannon', req: ['factory'], look: { kind: 'veh', L: 0.8, W: 0.55, H: 5, tur: 'mg', wheels: true }, desc: '裝甲突擊車,搭載30mm機砲。' },
+  ep_tank: { name: '雷神重型戰車', faction: 'ep', cat: 'veh', cost: 1100, hp: 780, armor: 'heavy', speed: 1.6, sight: 6,
+    weapon: 'cannon125', req: ['factory'], look: { kind: 'veh', L: 1.05, W: 0.75, H: 6, tur: 'cannon' }, desc: '重型主戰車,125mm主砲。' },
+  ep_art: { name: '電磁軌道砲車', faction: 'ep', cat: 'veh', cost: 1700, hp: 450, armor: 'light', speed: 1.4, sight: 8,
+    weapon: 'railgun', req: ['factory', 'tech'], look: { kind: 'veh', L: 1.1, W: 0.65, H: 5, tur: 'rail' }, desc: '超音速電磁彈丸,射程極遠。' }
+};
+
+// ===== 建築 =====
+// cat: bld 建築 / def 防禦
+const BUILDINGS = {
+  conyard:  { name: '建造中心', faction: null, cat: 'bld', w: 3, h: 3, hp: 2200, power: 20, cost: 3000, sight: 7, buildable: false, req: [] },
+  power:    { name: '聚變電廠', faction: null, cat: 'bld', w: 2, h: 2, hp: 750, power: 100, cost: 600, sight: 4, req: [],
+    desc: '小型核聚變反應爐,提供 100 電力。' },
+  refinery: { name: '稀土精煉廠', faction: null, cat: 'bld', w: 3, h: 3, hp: 1100, power: -30, cost: 1800, sight: 5, req: ['power'],
+    freeUnit: 'harvester', desc: '處理稀土礦。附贈一輛採集車。' },
+  barracks: { name: '兵營', faction: null, cat: 'bld', w: 2, h: 2, hp: 800, power: -15, cost: 500, sight: 5, req: ['power'],
+    desc: '訓練步兵。' },
+  factory:  { name: '戰車工廠', faction: null, cat: 'bld', w: 3, h: 3, hp: 1300, power: -40, cost: 2000, sight: 5, req: ['refinery'],
+    desc: '生產各式載具。' },
+  tech:     { name: '先進科技中心', faction: null, cat: 'bld', w: 2, h: 2, hp: 900, power: -80, cost: 2000, sight: 6, req: ['factory', 'barracks'],
+    desc: '解鎖先進武器。' },
+  ac_turret:{ name: '雷射防禦塔', faction: 'ac', cat: 'def', w: 1, h: 1, hp: 750, power: -40, cost: 900, sight: 7, req: ['barracks'],
+    weapon: 'laserTurret', desc: '高射速雷射塔,需要電力。' },
+  ep_turret:{ name: '電磁砲塔', faction: 'ep', cat: 'def', w: 1, h: 1, hp: 850, power: -40, cost: 900, sight: 7, req: ['barracks'],
+    weapon: 'railTurret', desc: '穿甲電磁砲塔,需要電力。' },
+  ac_super: { name: '天穹軌道雷射', faction: 'ac', cat: 'def', w: 2, h: 2, hp: 1500, power: -100, cost: 3000, sight: 5, req: ['tech'],
+    super: 'orbital', charge: 300, unique: true, desc: '超級武器:召喚軌道衛星的雷射光束,持續灼燒目標區域。充能 5 分鐘。' },
+  ep_super: { name: '高超音速導彈井', faction: 'ep', cat: 'def', w: 2, h: 2, hp: 1500, power: -100, cost: 3000, sight: 5, req: ['tech'],
+    super: 'missile', charge: 300, unique: true, desc: '超級武器:發射高超音速彈道導彈,造成大範圍毀滅。充能 5 分鐘。' }
+};
+
+// ===== 老兵等級 =====
+// 擊殺價值達自身造價 1 倍 → 老兵,3 倍 → 精英
+const VET = [
+  { name: '新兵', dmg: 1.0, rof: 1.0, armor: 1.0 },
+  { name: '老兵', dmg: 1.2, rof: 0.9, armor: 0.85 },
+  { name: '精英', dmg: 1.45, rof: 0.8, armor: 0.7 }
+];
+
+const CATS = ['bld', 'def', 'inf', 'veh'];
+const CAT_NAMES = { bld: '建築', def: '防禦', inf: '步兵', veh: '載具' };
+
+function getDef(type) { return UNITS[type] || BUILDINGS[type]; }
+function isBuildingType(type) { return !!BUILDINGS[type]; }
+
+// 建造時間(秒)
+function buildTime(type) {
+  const d = getDef(type);
+  return Math.max(4, d.cost / (isBuildingType(type) ? 140 : 110));
+}
+
+// ===== 小工具 =====
+function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
+function angDiff(a, b) { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; }
+function rotateTo(a, b, step) { const d = angDiff(a, b); return Math.abs(d) <= step ? b : a + Math.sign(d) * step; }
+
+const _shadeCache = new Map();
+function shade(hex, f) {
+  const key = hex + f;
+  let v = _shadeCache.get(key);
+  if (v) return v;
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const n = parseInt(h, 16);
+  const r = clamp(Math.round(((n >> 16) & 255) * f), 0, 255);
+  const g = clamp(Math.round(((n >> 8) & 255) * f), 0, 255);
+  const b = clamp(Math.round((n & 255) * f), 0, 255);
+  v = `rgb(${r},${g},${b})`;
+  _shadeCache.set(key, v);
+  return v;
+}
+</script>
+<script>
+'use strict';
+// ===== 地圖生成與尋路 =====
+const T_GRASS = 0, T_SAND = 1, T_WATER = 2, T_ROCK = 3, T_TREE = 4, T_DIRT = 5;
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function makeNoise(rng, cell) {
+  const gw = Math.ceil(MAP_W / cell) + 2, gh = Math.ceil(MAP_H / cell) + 2;
+  const g = new Float32Array(gw * gh).map(() => rng());
+  const sm = t => t * t * (3 - 2 * t);
+  return (x, y) => {
+    const fx = x / cell, fy = y / cell, ix = Math.floor(fx), iy = Math.floor(fy);
+    const tx = sm(fx - ix), ty = sm(fy - iy);
+    const a = g[iy * gw + ix], b = g[iy * gw + ix + 1], c = g[(iy + 1) * gw + ix], d = g[(iy + 1) * gw + ix + 1];
+    return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
+  };
+}
+
+class GameMap {
+  constructor(seed) {
+    this.w = MAP_W; this.h = MAP_H;
+    const n = MAP_W * MAP_H;
+    this.terrain = new Uint8Array(n);
+    this.ore = new Float32Array(n);
+    this.oreMax = new Float32Array(n);
+    this.oreType = new Uint8Array(n);   // 0 無, 1 稀土, 2 藍晶
+    this.variant = new Uint8Array(n);
+    this.bld = new Int32Array(n);       // 建築佔用 (entity id)
+    this.oreFields = [];
+    this.generate(seed);
+  }
+  idx(x, y) { return y * MAP_W + x; }
+  inb(x, y) { return x >= 0 && y >= 0 && x < MAP_W && y < MAP_H; }
+  terrainOk(x, y) {
+    if (!this.inb(x, y)) return false;
+    const t = this.terrain[y * MAP_W + x];
+    return t !== T_WATER && t !== T_ROCK && t !== T_TREE;
+  }
+  passable(x, y) { return this.terrainOk(x, y) && this.bld[y * MAP_W + x] === 0; }
+
+  generate(seed) {
+    const rng = mulberry32(seed);
+    this.rng = rng;
+    const nA = makeNoise(rng, 9), nB = makeNoise(rng, 11), nC = makeNoise(rng, 6), nD = makeNoise(rng, 5), nE = makeNoise(rng, 4);
+    this.starts = [{ x: 6, y: MAP_H - 10 }, { x: MAP_W - 10, y: 6 }];
+    const sc = this.starts.map(s => ({ x: s.x + 1.5, y: s.y + 1.5 }));
+    const near = (x, y, r) => sc.some(s => Math.hypot(x - s.x, y - s.y) < r);
+
+    for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+      const i = this.idx(x, y);
+      let t = T_GRASS;
+      if (nA(x, y) > 0.62) t = T_SAND; else if (nC(x, y) > 0.7) t = T_DIRT;
+      if (nB(x, y) > 0.68 && !near(x, y, 14)) t = T_WATER;
+      else if (nD(x, y) > 0.78 && !near(x, y, 10)) t = T_ROCK;
+      else if (t === T_GRASS && !near(x, y, 9) && rng() < (nE(x, y) > 0.6 ? 0.45 : 0.03)) t = T_TREE;
+      this.terrain[i] = t;
+      this.variant[i] = (rng() * 256) | 0;
+    }
+
+    // 礦區
+    const mid = { x: MAP_W / 2, y: MAP_H / 2 };
+    const fields = [];
+    for (const s of sc) {
+      const vx = mid.x - s.x, vy = mid.y - s.y, l = Math.hypot(vx, vy);
+      const ux = vx / l, uy = vy / l, px = -uy, py = ux;
+      fields.push({ x: s.x + ux * 8 + px * 4, y: s.y + uy * 8 + py * 4, r: 3.6, gem: 0 });
+      fields.push({ x: s.x + ux * 3 - px * 8, y: s.y + uy * 3 - py * 8, r: 3.0, gem: 0 });
+    }
+    fields.push({ x: mid.x, y: mid.y, r: 3.2, gem: 1 });
+    fields.push({ x: 18, y: 18, r: 4, gem: 0 });
+    fields.push({ x: MAP_W - 18, y: MAP_H - 18, r: 4, gem: 0 });
+    for (const f of fields) {
+      f.x = clamp(f.x, 4, MAP_W - 5); f.y = clamp(f.y, 4, MAP_H - 5);
+      const R = Math.ceil(f.r + 1);
+      for (let y = Math.floor(f.y) - R; y <= f.y + R; y++) for (let x = Math.floor(f.x) - R; x <= f.x + R; x++) {
+        if (!this.inb(x, y)) continue;
+        const d = Math.hypot(x + 0.5 - f.x, y + 0.5 - f.y);
+        if (d > f.r * (0.75 + 0.35 * rng())) continue;
+        const i = this.idx(x, y);
+        if (this.terrain[i] !== T_GRASS && this.terrain[i] !== T_SAND) this.terrain[i] = T_DIRT;
+        this.oreType[i] = f.gem && rng() < 0.6 ? 2 : 1;
+        this.oreMax[i] = 300 + (1 - d / f.r) * 500;
+        this.ore[i] = this.oreMax[i];
+      }
+      this.oreFields.push(f);
+    }
+
+    // 確保連通
+    const ensure = (ax, ay, bx, by) => {
+      if (this.reachable(ax | 0, ay | 0, bx | 0, by | 0)) return;
+      const steps = Math.ceil(Math.hypot(bx - ax, by - ay) * 2);
+      for (let k = 0; k <= steps; k++) {
+        const x = Math.round(ax + (bx - ax) * k / steps), y = Math.round(ay + (by - ay) * k / steps);
+        for (let oy = 0; oy <= 1; oy++) for (let ox = 0; ox <= 1; ox++) {
+          if (!this.inb(x + ox, y + oy)) continue;
+          const i = this.idx(x + ox, y + oy);
+          if (!this.terrainOk(x + ox, y + oy)) this.terrain[i] = T_DIRT;
+        }
+      }
+    };
+    ensure(sc[0].x, sc[0].y, sc[1].x, sc[1].y);
+    for (const f of fields) { ensure(sc[0].x, sc[0].y, f.x, f.y); ensure(sc[1].x, sc[1].y, f.x, f.y); }
+  }
+
+  reachable(ax, ay, bx, by) {
+    const seen = new Uint8Array(MAP_W * MAP_H);
+    const q = [ax + ay * MAP_W]; seen[q[0]] = 1;
+    while (q.length) {
+      const c = q.pop(), x = c % MAP_W, y = (c / MAP_W) | 0;
+      if (Math.abs(x - bx) <= 1 && Math.abs(y - by) <= 1) return true;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (!this.terrainOk(nx, ny)) continue;
+        const ni = nx + ny * MAP_W;
+        if (!seen[ni]) { seen[ni] = 1; q.push(ni); }
+      }
+    }
+    return false;
+  }
+
+  nearestPassable(x, y, maxR = 12, avoid) {
+    x = clamp(Math.floor(x), 0, MAP_W - 1); y = clamp(Math.floor(y), 0, MAP_H - 1);
+    if (this.passable(x, y) && !(avoid && avoid(x, y))) return [x, y];
+    for (let r = 1; r <= maxR; r++) {
+      let best = null, bd = 1e9;
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const nx = x + dx, ny = y + dy;
+        if (!this.passable(nx, ny) || (avoid && avoid(nx, ny))) continue;
+        const d = dx * dx + dy * dy;
+        if (d < bd) { bd = d; best = [nx, ny]; }
+      }
+      if (best) return best;
+    }
+    return null;
+  }
+
+  // A* 尋路;回傳磚格陣列 [[x,y],...](不含起點)
+  findPath(sx, sy, gx, gy, maxNodes = 6000) {
+    sx = Math.floor(sx); sy = Math.floor(sy); gx = Math.floor(gx); gy = Math.floor(gy);
+    if (!this.passable(gx, gy)) {
+      const p = this.nearestPassable(gx, gy, 8);
+      if (!p) return [];
+      gx = p[0]; gy = p[1];
+    }
+    if (sx === gx && sy === gy) return [];
+    const N = MAP_W * MAP_H;
+    const g = new Float32Array(N).fill(1e9);
+    const from = new Int32Array(N).fill(-1);
+    const closed = new Uint8Array(N);
+    const heap = []; // [f, idx]
+    const push = (f, i) => {
+      heap.push([f, i]);
+      let k = heap.length - 1;
+      while (k > 0) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; [heap[p], heap[k]] = [heap[k], heap[p]]; k = p; }
+    };
+    const pop = () => {
+      const top = heap[0], last = heap.pop();
+      if (heap.length) {
+        heap[0] = last; let k = 0;
+        for (;;) {
+          const l = 2 * k + 1, r = l + 1; let m = k;
+          if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+          if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+          if (m === k) break;
+          [heap[m], heap[k]] = [heap[k], heap[m]]; k = m;
+        }
+      }
+      return top;
+    };
+    const h = (x, y) => { const dx = Math.abs(x - gx), dy = Math.abs(y - gy); return Math.max(dx, dy) + 0.414 * Math.min(dx, dy); };
+    const si = this.idx(sx, sy), gi = this.idx(gx, gy);
+    g[si] = 0; push(h(sx, sy), si);
+    let best = si, bestH = h(sx, sy), count = 0;
+    const DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
+    while (heap.length && count++ < maxNodes) {
+      const [, c] = pop();
+      if (closed[c]) continue;
+      closed[c] = 1;
+      if (c === gi) { best = c; break; }
+      const cx = c % MAP_W, cy = (c / MAP_W) | 0;
+      const hc = h(cx, cy);
+      if (hc < bestH) { bestH = hc; best = c; }
+      for (const [dx, dy, cost] of DIRS) {
+        const nx = cx + dx, ny = cy + dy;
+        if (!this.passable(nx, ny)) continue;
+        if (dx && dy && (!this.passable(cx + dx, cy) || !this.passable(cx, cy + dy))) continue;
+        const ni = nx + ny * MAP_W;
+        if (closed[ni]) continue;
+        const ng = g[c] + cost;
+        if (ng < g[ni]) { g[ni] = ng; from[ni] = c; push(ng + h(nx, ny), ni); }
+      }
+    }
+    const path = [];
+    let c = best;
+    while (c !== si && c !== -1) { path.push([c % MAP_W, (c / MAP_W) | 0]); c = from[c]; }
+    path.reverse();
+    return this.smooth(sx, sy, path);
+  }
+
+  // 視線檢查,用於平滑路徑
+  lineClear(x0, y0, x1, y1) {
+    const steps = Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 3);
+    for (let k = 1; k < steps; k++) {
+      const x = x0 + (x1 - x0) * k / steps, y = y0 + (y1 - y0) * k / steps;
+      for (const [ox, oy] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]])
+        if (!this.passable(Math.floor(x + ox), Math.floor(y + oy))) return false;
+    }
+    return true;
+  }
+  smooth(sx, sy, path) {
+    if (path.length < 3) return path;
+    const out = [];
+    let cx = sx, cy = sy, i = 0;
+    while (i < path.length) {
+      let j = Math.min(path.length - 1, i + 8);
+      while (j > i && !this.lineClear(cx + 0.5, cy + 0.5, path[j][0] + 0.5, path[j][1] + 0.5)) j--;
+      out.push(path[j]); cx = path[j][0]; cy = path[j][1]; i = j + 1;
+    }
+    return out;
+  }
+}
+</script>
+<script>
+'use strict';
+// ===== 合成音效與語音 =====
+const Audio2 = { ctx: null, master: null, on: true, last: {}, noise: null };
+
+function audioInit() {
+  if (Audio2.ctx) return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    Audio2.ctx = new AC();
+    Audio2.master = Audio2.ctx.createGain();
+    Audio2.master.gain.value = 0.35;
+    Audio2.master.connect(Audio2.ctx.destination);
+    const len = Audio2.ctx.sampleRate;
+    const buf = Audio2.ctx.createBuffer(1, len, Audio2.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    Audio2.noise = buf;
+  } catch (e) { Audio2.ctx = null; }
+}
+
+function _env(g, t, a, peak, dec) {
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + a);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + a + dec);
+}
+function _osc(type, f0, f1, dur, vol, dest) {
+  const c = Audio2.ctx, t = c.currentTime;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+  _env(g, t, 0.005, vol, dur);
+  o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + 0.05);
+}
+function _noise(dur, vol, freq, q, dest, type = 'lowpass') {
+  const c = Audio2.ctx, t = c.currentTime;
+  const s = c.createBufferSource(); s.buffer = Audio2.noise;
+  const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q || 1;
+  const g = c.createGain(); _env(g, t, 0.005, vol, dur);
+  s.connect(f); f.connect(g); g.connect(dest);
+  s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
+}
+
+// x,y:世界座標;畫面外音量降低
+function sfx(name, x, y) {
+  if (!Audio2.on || !Audio2.ctx) return;
+  const now = performance.now();
+  const gap = { gun: 70, laserS: 70, laser: 80, cannonS: 70 }[name] || 50;
+  if (Audio2.last[name] && now - Audio2.last[name] < gap) return;
+  Audio2.last[name] = now;
+  let vol = 1;
+  if (x !== undefined) {
+    const [sx, sy] = worldToScreen(x, y);
+    const off = Math.max(0, -sx, sx - R.w, -sy, sy - R.h);
+    vol = clamp(1 - off / 300, 0.08, 1);
+  }
+  const c = Audio2.ctx, out = c.createGain(); out.gain.value = vol; out.connect(Audio2.master);
+  switch (name) {
+    case 'gun': _noise(0.07, 0.5, 2500, 1, out, 'bandpass'); break;
+    case 'cannonS': _noise(0.1, 0.6, 1200, 1, out, 'bandpass'); _osc('square', 180, 60, 0.08, 0.15, out); break;
+    case 'laserS': _osc('sawtooth', 1800, 300, 0.15, 0.18, out); break;
+    case 'laser': _osc('sawtooth', 1400, 120, 0.25, 0.25, out); _osc('sine', 900, 200, 0.25, 0.2, out); break;
+    case 'laserB': _osc('sawtooth', 600, 40, 0.7, 0.35, out); _osc('sine', 2400, 300, 0.5, 0.15, out); _noise(0.5, 0.3, 600, 1, out); break;
+    case 'rail': _osc('sine', 3000, 200, 0.35, 0.25, out); _noise(0.25, 0.7, 3000, 0.7, out, 'highpass'); _osc('square', 90, 30, 0.3, 0.2, out); break;
+    case 'rocket': _noise(0.35, 0.4, 900, 1, out); _osc('sawtooth', 300, 900, 0.2, 0.06, out); break;
+    case 'cannon': _noise(0.4, 0.9, 500, 1, out); _osc('sine', 120, 40, 0.3, 0.5, out); break;
+    case 'hit': _noise(0.3, 0.6, 700, 1, out); break;
+    case 'boom': _noise(0.8, 1.0, 400, 1, out); _osc('sine', 90, 30, 0.6, 0.6, out); break;
+    case 'bigboom': _noise(1.6, 1.0, 300, 1, out); _osc('sine', 70, 20, 1.2, 0.8, out); break;
+    case 'die': _osc('triangle', 500, 150, 0.2, 0.1, out); break;
+    case 'click': _osc('square', 900, 700, 0.04, 0.08, out); break;
+    case 'ready': _osc('sine', 660, 660, 0.12, 0.15, out); setTimeout(() => Audio2.ctx && _osc('sine', 990, 990, 0.15, 0.15, out), 120); break;
+    case 'place': _noise(0.3, 0.5, 300, 1, out); _osc('square', 200, 100, 0.15, 0.1, out); break;
+    case 'sell': _osc('sine', 1200, 600, 0.3, 0.15, out); break;
+    case 'ack': _osc('square', 500, 800, 0.06, 0.06, out); break;
+  }
+}
+
+// 語音播報 + 畫面訊息
+let _evaVoice = null, _evaLast = {};
+function eva(text, speak = true) {
+  UI.message(text);
+  if (!speak || !Audio2.on || !('speechSynthesis' in window)) return;
+  const now = performance.now();
+  if (_evaLast[text] && now - _evaLast[text] < 4000) return;
+  _evaLast[text] = now;
+  try {
+    if (!_evaVoice) {
+      const vs = speechSynthesis.getVoices();
+      _evaVoice = vs.find(v => /zh[-_]TW/i.test(v.lang)) || vs.find(v => /zh/i.test(v.lang)) || null;
+    }
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-TW'; if (_evaVoice) u.voice = _evaVoice;
+    u.rate = 1.1; u.pitch = 0.8; u.volume = 0.8;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  } catch (e) { /* 無語音支援 */ }
+}
+</script>
+<script>
+'use strict';
+// ===== 遊戲狀態與實體邏輯 =====
+const HARV_CAP = 700, HARV_RATE = 110, UNLOAD_RATE = 260;
+
+const G = {
+  map: null, entities: [], byId: new Map(), nextId: 1,
+  players: [], human: 0, effects: [], projs: [], strikes: [], reveals: [],
+  time: 0, over: false, sel: [], groups: {}, speed: 1,
+  difficulty: 'normal'
+};
+
+function me() { return G.players[G.human]; }
+function isEnemy(a, b) { return a !== b; }
+
+// ===== 玩家 =====
+function makePlayer(id, faction, isAI, startIdx) {
+  const N = MAP_W * MAP_H;
+  const queues = {};
+  for (const c of CATS) queues[c] = { cur: null, list: [], ready: null, paused: false };
+  return {
+    id, faction, color: FACTIONS[faction].color, isAI, startIdx,
+    credits: START_CREDITS, incomeMult: 1, queues,
+    powerProd: 0, powerUse: 0, lowPower: false,
+    bcount: {}, explored: new Uint8Array(N), visible: new Uint8Array(N),
+    defeated: false, lastAttackWarn: -99, ai: null
+  };
+}
+
+function refreshPlayerStats() {
+  for (const p of G.players) { p.bcount = {}; p.powerProd = 0; p.powerUse = 0; }
+  for (const e of G.entities) {
+    if (!e.alive || e.kind !== 'bld') continue;
+    const p = G.players[e.owner];
+    p.bcount[e.type] = (p.bcount[e.type] || 0) + 1;
+    const pw = e.def.power;
+    if (pw > 0) p.powerProd += pw * (e.hp / e.maxHp > 0.5 ? 1 : 0.6);
+    else p.powerUse -= pw;
+  }
+  for (const p of G.players) {
+    const was = p.lowPower;
+    p.lowPower = p.powerUse > p.powerProd;
+    if (!was && p.lowPower && p.id === G.human) eva('電力不足');
+  }
+}
+
+function reqMet(p, type) {
+  const d = getDef(type);
+  return d.req.every(r => p.bcount[r] > 0);
+}
+function canBuildType(p, type) {
+  const d = getDef(type);
+  if (d.buildable === false) return false;
+  if (d.faction && d.faction !== p.faction) return false;
+  if (d.unique) {
+    if (p.bcount[type]) return false;
+    const q = p.queues[d.cat];
+    if ((q.cur && q.cur.type === type) || q.ready === type) return true;
+  }
+  return reqMet(p, type);
+}
+function typesFor(p, cat) {
+  const list = [];
+  for (const [k, d] of Object.entries(BUILDINGS)) if (d.cat === cat && d.buildable !== false && (!d.faction || d.faction === p.faction)) list.push(k);
+  for (const [k, d] of Object.entries(UNITS)) if (d.cat === cat && (!d.faction || d.faction === p.faction)) list.push(k);
+  return list;
+}
+
+// ===== 生產 =====
+function queueItem(p, type) {
+  if (!canBuildType(p, type)) return false;
+  const d = getDef(type), q = p.queues[d.cat];
+  if (isBuildingType(type)) {
+    if (q.cur || q.ready) { if (p.id === G.human) eva('正在建造其他建築', false); return false; }
+    q.cur = { type, spent: 0 };
+  } else {
+    if (q.list.length >= 15) return false;
+    q.list.push(type);
+  }
+  if (p.id === G.human) { sfx('click'); if (isBuildingType(type) || q.list.length === 1 && !q.cur) eva(isBuildingType(type) ? '開始建造' : '開始訓練', false); }
+  return true;
+}
+function cancelItem(p, type) {
+  const d = getDef(type), q = p.queues[d.cat];
+  if (q.ready === type) { q.ready = null; p.credits += d.cost; if (p.id === G.human) { eva('已取消', false); UI.placing = null; } return; }
+  const li = q.list.lastIndexOf(type);
+  if (li >= 0) { q.list.splice(li, 1); return; }
+  if (q.cur && q.cur.type === type) {
+    if (!q.paused && p.id === G.human) { q.paused = true; eva('暫停', false); return; }
+    p.credits += q.cur.spent; q.cur = null; q.paused = false;
+    if (p.id === G.human) eva('已取消', false);
+  }
+}
+function producerCount(p, cat) {
+  if (cat === 'inf') return p.bcount.barracks || 0;
+  if (cat === 'veh') return p.bcount.factory || 0;
+  return p.bcount.conyard || 0;
+}
+function updateProduction(p, dt) {
+  for (const cat of CATS) {
+    const q = p.queues[cat];
+    const nProd = producerCount(p, cat);
+    if (!q.cur && q.list.length && !q.ready) q.cur = { type: q.list.shift(), spent: 0 };
+    if (!q.cur || q.paused || nProd === 0) continue;
+    if (!canBuildType(p, q.cur.type)) continue;
+    const d = getDef(q.cur.type);
+    let t = buildTime(q.cur.type);
+    if (p.lowPower) t *= 2;
+    t /= Math.min(2.5, 1 + 0.5 * (nProd - 1));
+    if (p.isAI) t /= p.ai.buildSpeed;
+    const want = d.cost / t * dt;
+    const pay = Math.min(want, d.cost - q.cur.spent, p.credits);
+    if (pay <= 0 && p.credits <= 0) {
+      if (p.id === G.human && G.time - (p.lastNoMoney || -99) > 10) { p.lastNoMoney = G.time; eva('資金不足'); }
+      continue;
+    }
+    p.credits -= pay; q.cur.spent += pay;
+    if (q.cur.spent >= d.cost - 0.001) {
+      const type = q.cur.type; q.cur = null;
+      if (isBuildingType(type)) {
+        q.ready = type;
+        if (p.id === G.human) { eva('建造完成'); sfx('ready'); }
+      } else {
+        const u = spawnUnit(p, type);
+        if (!u) { p.credits += d.cost; }
+        else if (p.id === G.human) { eva('單位就緒'); sfx('ready'); }
+      }
+    }
+  }
+}
+
+function exitTile(b) {
+  return G.map.nearestPassable(b.tx + Math.floor(b.w / 2), b.ty + b.h, 6);
+}
+function spawnUnit(p, type) {
+  const d = UNITS[type];
+  const ptype = d.cat === 'inf' ? 'barracks' : 'factory';
+  const prod = G.entities.find(e => e.alive && e.kind === 'bld' && e.owner === p.id && e.type === ptype);
+  if (!prod) return null;
+  const t = exitTile(prod);
+  if (!t) return null;
+  const u = new Unit(type, p.id, t[0] + 0.5, t[1] + 0.5);
+  addEntity(u);
+  if (!d.harvester) {
+    const r = p.rally || [t[0] + 0.5 + 1.5, t[1] + 0.5 + 1.5];
+    const dest = G.map.nearestPassable(r[0], r[1], 6, (x, y) => tileHasUnit(x, y, u));
+    if (dest) { u.order = { t: 'move' }; u.pathTo(dest[0] + 0.5, dest[1] + 0.5); }
+  }
+  return u;
+}
+
+// ===== 實體管理 =====
+function addEntity(e) { G.entities.push(e); G.byId.set(e.id, e); return e; }
+
+function tileHasUnit(x, y, except) {
+  for (const e of G.entities) if (e.alive && e.kind === 'unit' && e !== except && Math.floor(e.x) === x && Math.floor(e.y) === y) return true;
+  return false;
+}
+
+function canPlace(p, type, tx, ty) {
+  const d = BUILDINGS[type], m = G.map;
+  for (let y = ty; y < ty + d.h; y++) for (let x = tx; x < tx + d.w; x++) {
+    if (!m.terrainOk(x, y) || m.bld[m.idx(x, y)]) return false;
+    if (p.id === G.human && !p.explored[m.idx(x, y)]) return false;
+    for (const e of G.entities) if (e.alive && e.kind === 'unit' && e.owner !== p.id && Math.floor(e.x) === x && Math.floor(e.y) === y) return false;
+  }
+  // 需在己方建築附近
+  for (const b of G.entities) {
+    if (!b.alive || b.kind !== 'bld' || b.owner !== p.id) continue;
+    const gx = Math.max(0, b.tx - (tx + d.w), tx - (b.tx + b.w));
+    const gy = Math.max(0, b.ty - (ty + d.h), ty - (b.ty + b.h));
+    if (Math.max(gx, gy) <= BUILD_RADIUS) return true;
+  }
+  return false;
+}
+
+function placeBuilding(p, type, tx, ty, instant) {
+  const b = new Building(type, p.id, tx, ty);
+  if (b.def.super && p.id !== G.human) eva('警告:偵測到敵方超級武器');
+  if (instant) b.prog = 1;
+  addEntity(b);
+  const m = G.map;
+  for (let y = ty; y < ty + b.h; y++) for (let x = tx; x < tx + b.w; x++) m.bld[m.idx(x, y)] = b.id;
+  // 推開站在上面的單位
+  for (const e of G.entities) {
+    if (!e.alive || e.kind !== 'unit') continue;
+    if (e.x >= tx && e.x < tx + b.w && e.y >= ty && e.y < ty + b.h) {
+      const t = m.nearestPassable(e.x, e.y, 8);
+      if (t) { e.x = t[0] + 0.5; e.y = t[1] + 0.5; e.path = []; }
+    }
+  }
+  // 路徑經過此處的單位重新尋路
+  for (const e of G.entities) if (e.alive && e.kind === 'unit' && e.path.length) e.needRepath = true;
+  if (BUILDINGS[type].freeUnit) {
+    const dk = refineryDock(b);
+    if (dk) {
+      const u = new Unit(BUILDINGS[type].freeUnit, p.id, dk[0] + 0.5, dk[1] + 0.5);
+      addEntity(u);
+    }
+  }
+  refreshPlayerStats();
+  return b;
+}
+
+function refineryDock(b) { return G.map.nearestPassable(b.tx + b.w, b.ty + 1, 5); }
+
+// 距離:目標若為建築,量到其範圍邊緣
+function distTo(a, t) {
+  if (t.kind === 'bld') {
+    const dx = Math.max(t.tx - a.x, 0, a.x - (t.tx + t.w));
+    const dy = Math.max(t.ty - a.y, 0, a.y - (t.ty + t.h));
+    return Math.hypot(dx, dy);
+  }
+  return Math.hypot(t.x - a.x, t.y - a.y);
+}
+
+function findEnemyNear(src, r, unitsOnly) {
+  let best = null, bs = 1e9;
+  for (const e of G.entities) {
+    if (!e.alive || !isEnemy(e.owner, src.owner)) continue;
+    if (unitsOnly && e.kind !== 'unit') continue;
+    const d = distTo(src, e);
+    if (d > r) continue;
+    let s = d;
+    if (e.kind === 'bld') s += 4;
+    else if (!e.weapon) s += 2;
+    if (s < bs) { bs = s; best = e; }
+  }
+  return best;
+}
+
+// ===== 傷害與戰鬥 =====
+function armorOf(e) { return e.kind === 'bld' ? 'bld' : e.def.armor; }
+
+function vetOf(e) { return VET[e && e.rank ? e.rank : 0]; }
+function giveXp(a, value) {
+  if (!a || a.kind !== 'unit' || !a.alive) return;
+  a.xp += value;
+  const r = a.xp >= a.def.cost * 3 ? 2 : a.xp >= a.def.cost ? 1 : 0;
+  if (r > a.rank) {
+    a.rank = r;
+    if (a.owner === G.human) { eva(r === 2 ? '單位晉升為精英' : '單位晉升為老兵', false); sfx('ready'); }
+  }
+}
+
+function damage(t, amount, wh, attacker) {
+  if (!t.alive) return;
+  t.hp -= amount * WARHEADS[wh][armorOf(t)] * (t.kind === 'unit' ? vetOf(t).armor : 1);
+  t.hitT = G.time;
+  const p = G.players[t.owner];
+  if (p.id === G.human && G.time - p.lastAttackWarn > 20) {
+    p.lastAttackWarn = G.time;
+    eva(t.kind === 'bld' ? '我方基地遭受攻擊' : '我方部隊遭受攻擊');
+    UI.alertAt = [t.x, t.y, G.time];
+  }
+  if (p.ai && attacker && attacker.alive) p.ai.onAttacked(t, attacker);
+  if (t.hp <= 0) {
+    if (attacker && attacker.owner !== t.owner) giveXp(attacker, t.def.cost || 500);
+    kill(t); return;
+  }
+  // 反擊
+  if (t.kind === 'unit' && t.weapon && attacker && attacker.alive && t.order.t === 'idle') {
+    t.order = { t: 'attack', target: attacker, auto: true, home: [t.x, t.y] };
+  }
+}
+
+function damageArea(x, y, r, dmg, wh, owner, except, attacker) {
+  for (const e of G.entities) {
+    if (!e.alive || e === except || e.owner === owner) continue;
+    const d = e.kind === 'bld' ? distTo({ x, y }, e) : Math.hypot(e.x - x, e.y - y);
+    if (d <= r) damage(e, dmg * (1 - d / r * 0.5), wh, attacker || null);
+  }
+}
+
+function kill(e) {
+  e.alive = false; e.hp = 0;
+  const m = G.map;
+  if (e.kind === 'bld') {
+    for (let y = e.ty; y < e.ty + e.h; y++) for (let x = e.tx; x < e.tx + e.w; x++) if (m.bld[m.idx(x, y)] === e.id) m.bld[m.idx(x, y)] = 0;
+    for (let i = 0; i < e.w * e.h * 2 + 2; i++) {
+      addExplosion(e.tx + Math.random() * e.w, e.ty + Math.random() * e.h, 0.7 + Math.random() * 0.8, Math.random() * 0.8);
+    }
+    G.effects.push({ k: 'scorch', x: e.x, y: e.y, r: (e.w + e.h) / 3, t: 0, dur: 40 });
+    sfx('bigboom', e.x, e.y);
+    refreshPlayerStats();
+  } else {
+    if (e.def.cat === 'inf') {
+      G.effects.push({ k: 'corpse', x: e.x, y: e.y, c: G.players[e.owner].color, t: 0, dur: 6 });
+      sfx('die', e.x, e.y);
+    } else {
+      addExplosion(e.x, e.y, 0.9, 0);
+      G.effects.push({ k: 'wreck', x: e.x, y: e.y, dir: e.dir, L: e.def.look.L, W: e.def.look.W, t: 0, dur: 12 });
+      sfx('boom', e.x, e.y);
+    }
+  }
+  const si = G.sel.indexOf(e);
+  if (si >= 0) G.sel.splice(si, 1);
+}
+
+function addExplosion(x, y, size, delay) {
+  G.effects.push({ k: 'expl', x, y, size, t: -(delay || 0), dur: 0.7 });
+  for (let i = 0; i < 6 * size; i++) {
+    G.effects.push({ k: 'part', x, y, z: 2, vx: (Math.random() - 0.5) * 3 * size, vy: (Math.random() - 0.5) * 3 * size, vz: 20 + Math.random() * 40,
+      c: Math.random() < 0.5 ? '#ffb030' : '#555', t: -(delay || 0), dur: 0.6 + Math.random() * 0.6 });
+  }
+}
+
+function aimPoint(t) {
+  if (t.kind === 'bld') return [t.x, t.y, 8];
+  return [t.x, t.y, t.def.cat === 'inf' ? 4 : 5];
+}
+
+function fire(src, t, w) {
+  const [mx, my, mz] = src.muzzle();
+  const [ax, ay, az] = aimPoint(t);
+  // 對建築時射向較近的位置
+  let tx = ax, ty = ay;
+  if (t.kind === 'bld') { tx = clamp(src.x, t.tx + 0.3, t.tx + t.w - 0.3); ty = clamp(src.y, t.ty + 0.3, t.ty + t.h - 0.3); }
+  tx += (Math.random() - 0.5) * 0.2; ty += (Math.random() - 0.5) * 0.2;
+  sfx(w.snd, src.x, src.y);
+  const dmg = w.dmg * vetOf(src).dmg;
+  if (w.kind === 'laser' || w.kind === 'rail') {
+    damage(t, dmg, w.wh, src);
+    if (w.splash) damageArea(tx, ty, w.splash, dmg * 0.5, w.wh, src.owner, t, src);
+    G.effects.push({ k: w.kind === 'laser' ? 'beam' : 'rail', x1: mx, y1: my, z1: mz, x2: tx, y2: ty, z2: az,
+      w: w.width || 2, c: w.kind === 'laser' ? FACTIONS.ac.beam : FACTIONS.ep.beam, t: 0, dur: w.kind === 'laser' ? 0.3 : 0.5 });
+    G.effects.push({ k: 'spark', x: tx, y: ty, z: az, c: w.kind === 'laser' ? '#ffd0d0' : '#e0f6ff', t: 0, dur: 0.25 });
+    if (w.splash) addExplosion(tx, ty, 0.5, 0);
+    if (w.kind === 'laser' && w.width >= 2) G.effects.push({ k: 'glow', x: mx, y: my, z: mz, c: FACTIONS.ac.beam, t: 0, dur: 0.15 });
+  } else {
+    const speed = w.kind === 'bullet' ? 24 : w.speed;
+    const d = Math.hypot(tx - mx, ty - my);
+    G.projs.push({ k: w.kind, x0: mx, y0: my, z0: mz, x1: tx, y1: ty, z1: az, t: 0, dur: Math.max(0.05, d / speed),
+      target: t, w, dmg, owner: src.owner, src, c: w.color || '#ffd27a' });
+    G.effects.push({ k: 'flash', x: mx, y: my, z: mz, t: 0, dur: 0.08 });
+  }
+}
+
+function updateProjs(dt) {
+  for (const p of G.projs) {
+    p.t += dt;
+    if (p.k === 'missile' && Math.random() < 0.6) {
+      const f = p.t / p.dur;
+      G.effects.push({ k: 'smoke', x: p.x0 + (p.x1 - p.x0) * f, y: p.y0 + (p.y1 - p.y0) * f, z: p.z0 + (p.z1 - p.z0) * f + Math.sin(f * Math.PI) * 18, t: 0, dur: 0.6 });
+    }
+    if (p.t >= p.dur) {
+      p.done = true;
+      if (p.target.alive) damage(p.target, p.dmg, p.w.wh, p.src);
+      if (p.w.splash) damageArea(p.x1, p.y1, p.w.splash, p.dmg * 0.5, p.w.wh, p.owner, p.target, p.src);
+      if (p.k === 'bullet') G.effects.push({ k: 'spark', x: p.x1, y: p.y1, z: p.z1, c: '#ffe9a0', t: 0, dur: 0.12 });
+      else { addExplosion(p.x1, p.y1, p.k === 'shell' ? 0.55 : 0.45, 0); sfx('hit', p.x1, p.y1); }
+    }
+  }
+  G.projs = G.projs.filter(p => !p.done);
+}
+
+// ===== 單位 =====
+class Unit {
+  constructor(type, owner, x, y) {
+    this.id = G.nextId++; this.kind = 'unit'; this.type = type; this.def = UNITS[type]; this.owner = owner;
+    this.x = x; this.y = y; this.maxHp = this.hp = this.def.hp; this.alive = true;
+    this.dir = Math.PI * 0.75; this.tdir = this.dir;
+    this.path = []; this.dest = null; this.order = this.def.harvester ? { t: 'harvest' } : { t: 'idle' };
+    this.weapon = this.def.weapon ? WEAPONS[this.def.weapon] : null;
+    this.cool = Math.random() * 0.5; this.scan = Math.random() * 0.5; this.repath = 0;
+    this.anim = Math.random() * 10; this.moving = false; this.stuckT = 0; this.bestD = 1e9;
+    this.cargo = 0; this.hstate = 'seek'; this.htile = null; this.wait = 0; this.ref = null;
+    this.hitT = -99; this.xp = 0; this.rank = 0;
+  }
+  muzzle() {
+    const L = this.def.cat === 'inf' ? 0.15 : this.def.look.L * 0.55;
+    const z = this.def.cat === 'inf' ? 6 : this.def.look.H + 4;
+    return [this.x + Math.cos(this.tdir) * L, this.y + Math.sin(this.tdir) * L, z];
+  }
+  pathTo(gx, gy) {
+    this.dest = [gx, gy];
+    const p = G.map.findPath(this.x, this.y, gx, gy);
+    this.path = p.map(([x, y]) => [x + 0.5, y + 0.5]);
+    // 最後一步若在同格,走到精確點
+    if (this.path.length) {
+      const last = this.path[this.path.length - 1];
+      if (Math.floor(last[0]) === Math.floor(gx) && Math.floor(last[1]) === Math.floor(gy)) last[0] = gx, last[1] = gy;
+    }
+    this.bestD = 1e9; this.stuckT = 0; this.needRepath = false;
+  }
+  followPath(dt) {
+    if (this.needRepath && this.dest) this.pathTo(this.dest[0], this.dest[1]);
+    if (!this.path.length) { this.moving = false; return true; }
+    const [wx, wy] = this.path[0];
+    const dx = wx - this.x, dy = wy - this.y, d = Math.hypot(dx, dy);
+    const ang = Math.atan2(dy, dx);
+    let spd = this.def.speed;
+    if (this.def.cat === 'veh') {
+      this.dir = rotateTo(this.dir, ang, 5 * dt);
+      const off = Math.abs(angDiff(this.dir, ang));
+      spd = off > 1.1 ? 0 : spd * (1 - off * 0.6);
+    } else if (d > 0.01) this.dir = ang;
+    const tt = G.map.terrain[G.map.idx(Math.floor(this.x), Math.floor(this.y))];
+    if (tt === T_SAND) spd *= 0.85;
+    const step = spd * dt;
+    this.moving = step > 0;
+    this.anim += step * 6;
+    if (d <= step) {
+      this.x = wx; this.y = wy; this.path.shift(); this.bestD = 1e9; this.stuckT = 0;
+      return !this.path.length;
+    }
+    const nx = this.x + dx / d * step, ny = this.y + dy / d * step;
+    if (!G.map.passable(Math.floor(nx), Math.floor(ny)) && G.map.passable(Math.floor(this.x), Math.floor(this.y))) {
+      if (this.dest) this.pathTo(this.dest[0], this.dest[1]); else this.path = [];
+      return false;
+    }
+    this.x = nx; this.y = ny;
+    if (d < this.bestD - 0.03) { this.bestD = d; this.stuckT = 0; }
+    else {
+      this.stuckT += dt;
+      if (this.stuckT > 1.5) {
+        if (this.path.length <= 1 && d < 1.6) { this.path = []; this.moving = false; return true; }
+        if (this.dest) this.pathTo(this.dest[0], this.dest[1]);
+      }
+    }
+    return false;
+  }
+  update(dt) {
+    this.cool -= dt; this.scan -= dt;
+    if (this.rank === 2 && this.hp < this.maxHp && G.time - this.hitT > 3) this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.02 * dt);
+    if (this.def.harvester) { this.updateHarvester(dt); return; }
+    const o = this.order, w = this.weapon;
+    switch (o.t) {
+      case 'capture':
+        this.updateCapture(dt, o);
+        break;
+      case 'idle':
+        this.moving = false;
+        if (w && this.scan <= 0) {
+          this.scan = 0.5;
+          const e = findEnemyNear(this, this.def.sight);
+          if (e) this.order = { t: 'attack', target: e, auto: true, home: [this.x, this.y] };
+        }
+        if (this.path.length) this.followPath(dt);
+        this.tdir = rotateTo(this.tdir, this.dir, 2 * dt);
+        break;
+      case 'move':
+        if (this.followPath(dt)) this.order = { t: 'idle' };
+        this.tdir = rotateTo(this.tdir, this.dir, 4 * dt);
+        break;
+      case 'amove':
+        if (w && this.scan <= 0) {
+          this.scan = 0.4;
+          const e = findEnemyNear(this, this.def.sight);
+          if (e) { this.order = { t: 'attack', target: e, auto: true, resume: o }; break; }
+        }
+        if (this.followPath(dt)) this.order = { t: 'idle' };
+        this.tdir = rotateTo(this.tdir, this.dir, 4 * dt);
+        break;
+      case 'attack':
+        this.updateAttack(dt, o);
+        break;
+    }
+  }
+  updateCapture(dt, o) {
+    const t = o.target;
+    if (!t.alive || (t.owner === this.owner && t.hp >= t.maxHp)) { this.order = { t: 'idle' }; this.path = []; return; }
+    if (distTo(this, t) <= 1.2) {
+      if (t.owner === this.owner) {
+        t.hp = t.maxHp;
+        if (this.owner === G.human) eva('建築已修復');
+      } else {
+        const old = G.players[t.owner];
+        t.owner = this.owner; t.repairing = false; t.target = null;
+        if (t.def.super) t.charge = 0;
+        if (this.owner === G.human) eva('建築已佔領');
+        else if (old.id === G.human) eva('我方建築被佔領');
+        refreshPlayerStats();
+      }
+      sfx('ready', t.x, t.y);
+      this.alive = false; this.hp = 0;
+      const si = G.sel.indexOf(this); if (si >= 0) G.sel.splice(si, 1);
+      return;
+    }
+    this.repath -= dt;
+    if (this.repath <= 0 || !this.path.length) { this.repath = 1.5; this.pathTo(t.x, t.y); }
+    if (this.followPath(dt) && distTo(this, t) > 1.2) this.repath = 0.5;
+  }
+  endAttack(o) {
+    if (o.resume) { this.order = o.resume; this.pathTo(o.resume.gx, o.resume.gy); }
+    else this.order = { t: 'idle' };
+    this.path = this.order.t === 'idle' ? [] : this.path;
+  }
+  updateAttack(dt, o) {
+    const t = o.target, w = this.weapon;
+    if (!w || !t.alive) { this.endAttack(o); return; }
+    const d = distTo(this, t);
+    if (d <= w.range) {
+      this.path = []; this.moving = false;
+      const ang = Math.atan2(t.y - this.y, t.x - this.x);
+      let aimed;
+      if (this.def.cat === 'inf') { this.dir = ang; this.tdir = ang; aimed = true; }
+      else { this.tdir = rotateTo(this.tdir, ang, 5 * dt); aimed = Math.abs(angDiff(this.tdir, ang)) < 0.12; }
+      if (aimed && this.cool <= 0) { fire(this, t, w); this.cool = w.rof * vetOf(this).rof * (0.9 + Math.random() * 0.2); }
+    } else {
+      if (o.auto && o.home && !o.resume && Math.hypot(this.x - o.home[0], this.y - o.home[1]) > 7) {
+        this.order = { t: 'move' }; this.pathTo(o.home[0], o.home[1]); return;
+      }
+      if (o.auto && d > this.def.sight + 3) { this.endAttack(o); return; }
+      this.repath -= dt;
+      if (this.repath <= 0 || !this.path.length) { this.repath = 1.0; this.pathTo(t.x, t.y); }
+      this.followPath(dt);
+      this.tdir = rotateTo(this.tdir, this.dir, 4 * dt);
+    }
+  }
+  updateHarvester(dt) {
+    const o = this.order, m = G.map;
+    if (o.t === 'move') {
+      if (this.followPath(dt)) { this.order = { t: 'harvest' }; this.hstate = 'seek'; }
+      return;
+    }
+    switch (this.hstate) {
+      case 'seek': {
+        this.moving = false;
+        this.wait -= dt; if (this.wait > 0) return;
+        if (this.cargo >= HARV_CAP) { this.hstate = 'toRef'; this.ref = null; return; }
+        const tile = this.findOre();
+        if (!tile) { this.wait = 3; if (this.cargo > 0) { this.hstate = 'toRef'; this.ref = null; } return; }
+        this.htile = tile; this.pathTo(tile[0] + 0.5, tile[1] + 0.5); this.hstate = 'toOre';
+        break;
+      }
+      case 'toOre':
+        if (this.followPath(dt)) {
+          const tx = Math.floor(this.x), ty = Math.floor(this.y);
+          if (m.ore[m.idx(tx, ty)] > 5) { this.htile = [tx, ty]; this.hstate = 'harvest'; }
+          else { this.hstate = 'seek'; this.wait = 0.3; }
+        }
+        break;
+      case 'harvest': {
+        this.moving = false;
+        const i = m.idx(this.htile[0], this.htile[1]);
+        const mult = m.oreType[i] === 2 ? 2 : 1;
+        const take = Math.min(HARV_RATE * dt, m.ore[i], (HARV_CAP - this.cargo) / mult);
+        m.ore[i] -= take; this.cargo += take * mult;
+        this.anim += dt * 8;
+        if (this.cargo >= HARV_CAP - 0.5) { this.hstate = 'toRef'; this.ref = null; }
+        else if (m.ore[i] < 1) { this.hstate = 'seek'; }
+        break;
+      }
+      case 'toRef': {
+        if (!this.ref || !this.ref.alive) {
+          let best = null, bd = 1e9;
+          for (const e of G.entities) if (e.alive && e.kind === 'bld' && e.type === 'refinery' && e.owner === this.owner) {
+            const d = dist(this.x, this.y, e.x, e.y); if (d < bd) { bd = d; best = e; }
+          }
+          if (!best) { this.moving = false; this.wait = 2; this.hstate = 'seek'; return; }
+          this.ref = best;
+          const dk = refineryDock(best);
+          if (!dk) return;
+          this.dock = dk; this.pathTo(dk[0] + 0.5, dk[1] + 0.5);
+        }
+        if (this.followPath(dt)) {
+          if (dist(this.x, this.y, this.dock[0] + 0.5, this.dock[1] + 0.5) < 0.9) this.hstate = 'unload';
+          else this.pathTo(this.dock[0] + 0.5, this.dock[1] + 0.5);
+        }
+        break;
+      }
+      case 'unload': {
+        this.moving = false;
+        if (!this.ref || !this.ref.alive) { this.hstate = 'toRef'; this.ref = null; return; }
+        this.dir = rotateTo(this.dir, Math.PI, 3 * dt);
+        const p = G.players[this.owner];
+        const amt = Math.min(UNLOAD_RATE * dt, this.cargo);
+        this.cargo -= amt; p.credits += amt * p.incomeMult;
+        if (this.cargo <= 0.01) { this.cargo = 0; this.hstate = 'seek'; }
+        break;
+      }
+    }
+  }
+  findOre() {
+    const m = G.map;
+    let best = null, bs = 1e9;
+    const ox = this.htile ? this.htile[0] : this.x, oy = this.htile ? this.htile[1] : this.y;
+    const claimed = new Set();
+    for (const e of G.entities) if (e !== this && e.alive && e.kind === 'unit' && e.def.harvester && e.htile && (e.hstate === 'toOre' || e.hstate === 'harvest')) claimed.add(e.htile[0] + e.htile[1] * MAP_W);
+    for (let i = 0; i < m.ore.length; i++) {
+      if (m.ore[i] < 30 || m.bld[i]) continue;
+      const x = i % MAP_W, y = (i / MAP_W) | 0;
+      let s = dist(ox, oy, x, y) + (claimed.has(i) ? 6 : 0);
+      if (s < bs) { bs = s; best = [x, y]; }
+    }
+    return best;
+  }
+}
+
+// ===== 建築 =====
+class Building {
+  constructor(type, owner, tx, ty) {
+    this.id = G.nextId++; this.kind = 'bld'; this.type = type; this.def = BUILDINGS[type]; this.owner = owner;
+    this.tx = tx; this.ty = ty; this.w = this.def.w; this.h = this.def.h;
+    this.x = tx + this.w / 2; this.y = ty + this.h / 2;
+    this.maxHp = this.hp = this.def.hp; this.alive = true; this.prog = 0;
+    this.weapon = this.def.weapon ? WEAPONS[this.def.weapon] : null;
+    this.tdir = Math.PI * 0.75; this.cool = 0; this.scan = 0; this.target = null;
+    this.repairing = false; this.hitT = -99; this.anim = Math.random() * 10;
+    this.charge = 0;
+  }
+  muzzle() { return [this.x + Math.cos(this.tdir) * 0.35, this.y + Math.sin(this.tdir) * 0.35, 16]; }
+  update(dt) {
+    this.anim += dt;
+    if (this.prog < 1) { this.prog = Math.min(1, this.prog + dt / 1.5); return; }
+    const p = G.players[this.owner];
+    if (this.repairing) {
+      if (this.hp >= this.maxHp) this.repairing = false;
+      else {
+        const heal = Math.min(this.maxHp * 0.04 * dt, this.maxHp - this.hp);
+        const cost = heal * this.def.cost / this.maxHp * 0.25;
+        if (p.credits >= cost) { p.credits -= cost; this.hp += heal; }
+        if (Math.random() < dt * 3) G.effects.push({ k: 'spark', x: this.tx + Math.random() * this.w, y: this.ty + Math.random() * this.h, z: 10 + Math.random() * 8, c: '#7fff7f', t: 0, dur: 0.3 });
+      }
+    }
+    if (this.def.super) {
+      const was = this.charge >= this.def.charge;
+      if (!p.lowPower) this.charge = Math.min(this.def.charge, this.charge + dt);
+      if (!was && this.charge >= this.def.charge) {
+        if (p.id === G.human) eva('超級武器已就緒');
+        else eva('警告:敵方超級武器已就緒');
+      }
+    }
+    const w = this.weapon;
+    if (!w || p.lowPower) return;
+    this.cool -= dt; this.scan -= dt;
+    if (this.target && (!this.target.alive || distTo(this, this.target) > w.range)) this.target = null;
+    if (!this.target && this.scan <= 0) { this.scan = 0.4; this.target = findEnemyNear(this, w.range, true) || findEnemyNear(this, w.range); }
+    if (this.target) {
+      const t = this.target;
+      const ang = Math.atan2(t.y - this.y, t.x - this.x);
+      this.tdir = rotateTo(this.tdir, ang, 4 * dt);
+      if (Math.abs(angDiff(this.tdir, ang)) < 0.1 && this.cool <= 0) { fire(this, t, w); this.cool = w.rof; }
+    }
+  }
+}
+
+// ===== 指令 =====
+function spreadDest(x, y, n) {
+  const m = G.map, out = [];
+  const sx = clamp(Math.floor(x), 0, MAP_W - 1), sy = clamp(Math.floor(y), 0, MAP_H - 1);
+  const start = m.nearestPassable(sx, sy, 10);
+  if (!start) return [];
+  const seen = new Set([start[0] + start[1] * MAP_W]);
+  const q = [start];
+  while (q.length && out.length < n) {
+    const c = q.shift();
+    out.push(c);
+    for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+      const nx = c[0] + dx, ny = c[1] + dy, k = nx + ny * MAP_W;
+      if (!seen.has(k) && m.passable(nx, ny)) { seen.add(k); q.push([nx, ny]); }
+    }
+  }
+  return out;
+}
+
+function cmdMove(units, x, y, attackMove) {
+  if (!units.length) return;
+  // 依與目標距離排序,讓近的單位分配到靠中心的位置
+  const us = units.slice().sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y));
+  const dests = spreadDest(x, y, us.length);
+  us.forEach((u, i) => {
+    const d = dests[i] || dests[0];
+    if (!d) return;
+    const gx = us.length === 1 ? x : d[0] + 0.5, gy = us.length === 1 ? y : d[1] + 0.5;
+    u.order = { t: attackMove && u.weapon ? 'amove' : 'move', gx, gy };
+    u.pathTo(gx, gy);
+  });
+}
+
+function cmdAttack(units, target) {
+  for (const u of units) {
+    if (!u.weapon) continue;
+    u.order = { t: 'attack', target, auto: false };
+    u.repath = 0;
+  }
+}
+
+function cmdCapture(units, target) {
+  for (const u of units) { u.order = { t: 'capture', target }; u.repath = 0; }
+}
+
+// ===== 超級武器 =====
+function fireSuper(b, x, y) {
+  if (!b.alive || b.charge < b.def.charge) return false;
+  b.charge = 0;
+  const kind = b.def.super, owner = b.owner;
+  if (owner === G.human) eva(kind === 'orbital' ? '軌道雷射啟動' : '導彈已發射');
+  else eva(kind === 'orbital' ? '警告:敵方軌道雷射已啟動' : '警告:偵測到敵方導彈發射');
+  if (kind === 'orbital') {
+    G.strikes.push({ k: 'orbital', x, y, cx: x, cy: y, owner, t: 0, dur: 4.5, tick: 0 });
+    sfx('laserB', x, y);
+  } else {
+    G.strikes.push({ k: 'missile', x, y, owner, t: 0, dur: 3, sx: b.x, sy: b.y });
+    sfx('rocket', b.x, b.y);
+  }
+  if (owner !== G.human) UI.alertAt = [x, y, G.time];
+  // 目標區域短暫可見
+  G.reveals.push({ x, y, owner, until: G.time + 8 });
+  return true;
+}
+function updateStrikes(dt) {
+  for (const s of G.strikes) {
+    s.t += dt;
+    if (s.k === 'orbital') {
+      if (s.t > 1) {
+        s.tick -= dt;
+        s.cx = s.x + Math.sin(s.t * 1.7) * 0.6; s.cy = s.y + Math.cos(s.t * 1.3) * 0.6;
+        if (s.tick <= 0) {
+          s.tick = 0.2;
+          damageArea(s.cx, s.cy, 2.6, 42, 'siege', s.owner);
+          addExplosion(s.cx + (Math.random() - 0.5) * 2.5, s.cy + (Math.random() - 0.5) * 2.5, 0.8, 0);
+          if (Math.random() < 0.4) sfx('boom', s.cx, s.cy);
+          G.effects.push({ k: 'scorch', x: s.cx, y: s.cy, r: 1.2, t: 0, dur: 30 });
+        }
+      }
+    } else if (s.t >= s.dur && !s.done) {
+      s.done = true;
+      damageArea(s.x, s.y, 3.2, 640, 'siege', s.owner);
+      for (let i = 0; i < 14; i++) addExplosion(s.x + (Math.random() - 0.5) * 5, s.y + (Math.random() - 0.5) * 5, 1 + Math.random(), Math.random() * 0.6);
+      G.effects.push({ k: 'shock', x: s.x, y: s.y, t: 0, dur: 0.8 });
+      G.effects.push({ k: 'scorch', x: s.x, y: s.y, r: 3, t: 0, dur: 60 });
+      sfx('bigboom', s.x, s.y);
+    }
+  }
+  G.strikes = G.strikes.filter(s => s.t < s.dur);
+  G.reveals = G.reveals.filter(r => r.until > G.time);
+}
+
+function cmdStop(units) {
+  for (const u of units) { u.path = []; u.order = u.def.harvester ? { t: 'harvest' } : { t: 'idle' }; if (u.def.harvester) u.hstate = 'seek'; }
+}
+
+function sellBuilding(b) {
+  if (!b.alive || b.kind !== 'bld') return;
+  const p = G.players[b.owner];
+  p.credits += Math.floor(b.def.cost * 0.5 * b.hp / b.maxHp);
+  b.alive = false;
+  const m = G.map;
+  for (let y = b.ty; y < b.ty + b.h; y++) for (let x = b.tx; x < b.tx + b.w; x++) m.bld[m.idx(x, y)] = 0;
+  // 退回部分步兵
+  const n = Math.min(3, Math.floor(b.def.cost / 600));
+  const infType = p.faction + '_inf';
+  for (let i = 0; i < n; i++) {
+    const t = m.nearestPassable(b.x, b.y, 6, (x, y) => tileHasUnit(x, y));
+    if (t) addEntity(new Unit(infType, p.id, t[0] + 0.5, t[1] + 0.5));
+  }
+  const si = G.sel.indexOf(b); if (si >= 0) G.sel.splice(si, 1);
+  refreshPlayerStats();
+  if (p.id === G.human) { eva('建築已出售'); sfx('sell'); }
+}
+
+// ===== 每幀更新 =====
+let _statT = 0, _fogT = 0, _oreT = 0, _endT = 0;
+function updateGame(dt) {
+  G.time += dt;
+  _statT -= dt;
+  if (_statT <= 0) { _statT = 0.5; refreshPlayerStats(); }
+  for (const p of G.players) { if (!p.defeated) updateProduction(p, dt); if (p.ai) p.ai.update(dt); }
+  for (const e of G.entities) if (e.alive) e.update(dt);
+  separate(dt);
+  updateProjs(dt);
+  updateStrikes(dt);
+  for (const f of G.effects) {
+    f.t += dt;
+    if (f.k === 'part' && f.t > 0) { f.x += f.vx * dt; f.y += f.vy * dt; f.z += f.vz * dt; f.vz -= 120 * dt; if (f.z < 0) { f.z = 0; f.vz *= -0.3; } }
+    if (f.k === 'smoke') f.z += 10 * dt;
+  }
+  G.effects = G.effects.filter(f => f.t < f.dur);
+  if (G.entities.some(e => !e.alive)) {
+    G.entities = G.entities.filter(e => e.alive);
+    G.byId = new Map(G.entities.map(e => [e.id, e]));
+  }
+  // 礦物再生
+  _oreT -= dt;
+  if (_oreT <= 0) {
+    _oreT = 2;
+    const m = G.map;
+    for (let i = 0; i < m.ore.length; i++) if (m.oreType[i] && m.ore[i] < m.oreMax[i]) m.ore[i] = Math.min(m.oreMax[i], m.ore[i] + 3);
+  }
+  _fogT -= dt;
+  if (_fogT <= 0) { _fogT = 0.25; updateFog(me()); }
+  _endT -= dt;
+  if (_endT <= 0) { _endT = 1; checkEnd(); }
+}
+
+function separate(dt) {
+  const us = G.entities.filter(e => e.alive && e.kind === 'unit');
+  const m = G.map;
+  for (let i = 0; i < us.length; i++) {
+    const a = us[i];
+    if (a.def.harvester && (a.hstate === 'unload' || a.hstate === 'harvest')) continue;
+    for (let j = i + 1; j < us.length; j++) {
+      const b = us[j];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      if (Math.abs(dx) > 0.7 || Math.abs(dy) > 0.7) continue;
+      if (b.def.harvester && (b.hstate === 'unload' || b.hstate === 'harvest')) continue;
+      const ra = a.def.cat === 'inf' ? 0.18 : 0.38, rb = b.def.cat === 'inf' ? 0.18 : 0.38;
+      const d = Math.hypot(dx, dy) || 0.01, min = ra + rb;
+      if (d >= min) continue;
+      const push = Math.min((min - d) * 0.5, 2 * dt);
+      const nx = dx / d * push, ny = dy / d * push;
+      // 移動中的單位較不會被推開
+      const wa = a.moving && !b.moving ? 0.25 : 0.5, wb = 1 - wa;
+      const ax = a.x - nx * wa * 2, ay = a.y - ny * wa * 2, bx = b.x + nx * wb * 2, by = b.y + ny * wb * 2;
+      if (m.passable(Math.floor(ax), Math.floor(ay))) { a.x = ax; a.y = ay; }
+      if (m.passable(Math.floor(bx), Math.floor(by))) { b.x = bx; b.y = by; }
+    }
+  }
+}
+
+function updateFog(p) {
+  const vis = p.visible;
+  vis.fill(0);
+  for (const e of G.entities) {
+    if (!e.alive || e.owner !== p.id) continue;
+    const r = e.def.sight + (e.kind === 'bld' ? Math.max(e.w, e.h) / 2 : 0);
+    const cx = e.x, cy = e.y;
+    const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(MAP_W - 1, Math.floor(cx + r));
+    const y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(MAP_H - 1, Math.floor(cy + r));
+    const r2 = r * r;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+      if (dx * dx + dy * dy <= r2) { const i = y * MAP_W + x; vis[i] = 1; p.explored[i] = 1; }
+    }
+  }
+  for (const r of G.reveals) {
+    if (r.owner !== p.id) continue;
+    for (let y = Math.max(0, Math.floor(r.y - 4)); y <= Math.min(MAP_H - 1, r.y + 4); y++)
+      for (let x = Math.max(0, Math.floor(r.x - 4)); x <= Math.min(MAP_W - 1, r.x + 4); x++) {
+        if (Math.hypot(x + 0.5 - r.x, y + 0.5 - r.y) <= 4) { vis[y * MAP_W + x] = 1; p.explored[y * MAP_W + x] = 1; }
+      }
+  }
+}
+function isVisible(e) {
+  const p = me();
+  if (e.owner === p.id) return true;
+  if (e.kind === 'bld') {
+    for (let y = e.ty; y < e.ty + e.h; y++) for (let x = e.tx; x < e.tx + e.w; x++) if (p.explored[y * MAP_W + x]) return true;
+    return false;
+  }
+  const x = Math.floor(e.x), y = Math.floor(e.y);
+  return G.map.inb(x, y) && p.visible[y * MAP_W + x] === 1;
+}
+
+function checkEnd() {
+  if (G.over) return;
+  for (const p of G.players) {
+    if (p.defeated) continue;
+    const alive = G.entities.some(e => e.alive && e.owner === p.id && e.kind === 'bld');
+    if (!alive) p.defeated = true;
+  }
+  if (me().defeated) endGame(false);
+  else if (G.players.every(p => p.id === G.human || p.defeated)) endGame(true);
+}
+
+// ===== 新遊戲 =====
+function newGame(opts) {
+  const seed = opts.seed || (Math.random() * 1e9) | 0;
+  G.map = new GameMap(seed);
+  G.entities = []; G.byId = new Map(); G.nextId = 1; G.effects = []; G.projs = []; G.strikes = []; G.reveals = [];
+  G.time = 0; G.over = false; G.sel = []; G.groups = {}; G.difficulty = opts.difficulty;
+  const other = opts.faction === 'ac' ? 'ep' : 'ac';
+  const swap = (seed & 1) === 1;
+  const human = makePlayer(0, opts.faction, false, swap ? 1 : 0);
+  const ai = makePlayer(1, other, true, swap ? 0 : 1);
+  G.players = [human, ai]; G.human = 0;
+  ai.ai = new AI(ai, opts.difficulty);
+  for (const p of G.players) {
+    const s = G.map.starts[p.startIdx];
+    placeBuilding(p, 'conyard', s.x, s.y, true);
+    const cx = s.x + 1.5, cy = s.y + 1.5;
+    const vx = MAP_W / 2 - cx, vy = MAP_H / 2 - cy, l = Math.hypot(vx, vy);
+    const spawn = [[p.faction + '_inf', 0], [p.faction + '_inf', 1], [p.faction + '_inf', 2], [p.faction + '_light', 3]];
+    const dests = spreadDest(cx + vx / l * 4, cy + vy / l * 4, spawn.length);
+    spawn.forEach(([t], i) => { if (dests[i]) addEntity(new Unit(t, p.id, dests[i][0] + 0.5, dests[i][1] + 0.5)); });
+  }
+  refreshPlayerStats();
+  updateFog(human);
+  const s = G.map.starts[human.startIdx];
+  centerCamera(s.x + 1.5, s.y + 1.5);
+}
+</script>
+<script>
+'use strict';
+// ===== 電腦對手 =====
+const AI_CFG = {
+  easy:   { income: 0.75, build: 0.75, wave: 5,  interval: 170, first: 330, turrets: 1, harvPerRef: 1 },
+  normal: { income: 1.0,  build: 1.0,  wave: 7,  interval: 130, first: 260, turrets: 2, harvPerRef: 2 },
+  hard:   { income: 1.3,  build: 1.35, wave: 9,  interval: 95,  first: 190, turrets: 4, harvPerRef: 2 }
+};
+const AI_ORDER = ['power', 'refinery', 'barracks', 'power', 'factory', 'refinery', 'power', 'tech', 'power', 'barracks', 'factory', 'power'];
+
+class AI {
+  constructor(p, diff) {
+    this.p = p; this.cfg = AI_CFG[diff] || AI_CFG.normal;
+    p.incomeMult = this.cfg.income; this.buildSpeed = this.cfg.build;
+    this.think = 1; this.nextAttack = this.cfg.first; this.waveSize = this.cfg.wave;
+    this.lastDefend = -99; this.attackers = new Set();
+  }
+  get enemy() { return G.players.find(q => q.id !== this.p.id); }
+  baseCenter() {
+    const c = G.entities.find(e => e.alive && e.owner === this.p.id && e.type === 'conyard')
+      || G.entities.find(e => e.alive && e.owner === this.p.id && e.kind === 'bld');
+    if (c) return [c.x, c.y];
+    const s = G.map.starts[this.p.startIdx]; return [s.x + 1.5, s.y + 1.5];
+  }
+  update(dt) {
+    if (this.p.defeated) return;
+    this.think -= dt;
+    if (this.think > 0) return;
+    this.think = 0.8;
+    const p = this.p;
+    const [cx, cy] = this.baseCenter();
+    if (!p.rally) {
+      const vx = MAP_W / 2 - cx, vy = MAP_H / 2 - cy, l = Math.hypot(vx, vy) || 1;
+      p.rally = [cx + vx / l * 6, cy + vy / l * 6];
+    }
+
+    // 1. 放置完成的建築
+    for (const cat of ['bld', 'def']) {
+      const q = p.queues[cat];
+      if (q.ready) {
+        const spot = this.findSpot(q.ready);
+        if (spot) { placeBuilding(p, q.ready, spot[0], spot[1]); q.ready = null; }
+        else { p.credits += getDef(q.ready).cost; q.ready = null; }
+      }
+    }
+
+    // 2. 建造順序
+    const qb = p.queues.bld;
+    if (!qb.cur && !qb.ready && p.bcount.conyard) {
+      let next = null;
+      if (p.powerProd - p.powerUse < 25 && (p.bcount.power || 0) > 0) next = 'power';
+      else {
+        const need = {};
+        for (const t of AI_ORDER) {
+          need[t] = (need[t] || 0) + 1;
+          if ((p.bcount[t] || 0) < need[t] && canBuildType(p, t)) { next = t; break; }
+        }
+      }
+      if (next && p.credits > 200) queueItem(p, next);
+    }
+
+    // 3. 防禦塔
+    const qd = p.queues.def;
+    const turretType = p.faction + '_turret';
+    const wantTurrets = Math.min(8, Math.floor(this.cfg.turrets * (1 + G.time / 500)));
+    if (!qd.cur && !qd.ready && canBuildType(p, turretType) && (p.bcount[turretType] || 0) < wantTurrets && p.credits > 1200 && p.bcount.factory)
+      queueItem(p, turretType);
+
+    // 3b. 超級武器
+    const superType = p.faction + '_super';
+    if (!qd.cur && !qd.ready && canBuildType(p, superType) && G.time > 420)
+      queueItem(p, superType);
+    const sw = G.entities.find(e => e.alive && e.owner === p.id && e.def.super && e.prog >= 1);
+    if (sw && sw.charge >= sw.def.charge) {
+      const t = this.superTarget();
+      if (t) fireSuper(sw, t[0], t[1]);
+    }
+
+    // 4. 生產單位
+    const units = G.entities.filter(e => e.alive && e.owner === p.id && e.kind === 'unit');
+    const harv = units.filter(u => u.def.harvester).length;
+    const qv = p.queues.veh, qi = p.queues.inf;
+    const harvQueued = qv.list.includes('harvester') || (qv.cur && qv.cur.type === 'harvester');
+    const wantHarv = Math.min(6, (p.bcount.refinery || 0) * this.cfg.harvPerRef);
+    if (harv < wantHarv && !harvQueued && canBuildType(p, 'harvester')) qv.list.unshift('harvester');
+    const saving = qd.cur && getDef(qd.cur.type).super;
+    if (qi.list.length < 2 && p.credits > 300 && !saving) {
+      const opts = typesFor(p, 'inf').filter(t => canBuildType(p, t));
+      if (opts.length) queueItem(p, Math.random() < 0.55 ? opts[0] : opts[opts.length - 1]);
+    }
+    if (qv.list.length < 2 && p.credits > 700 && !saving) {
+      const f = p.faction, r = Math.random();
+      let t = r < 0.5 ? f + '_tank' : r < 0.75 ? f + '_light' : f + '_art';
+      if (!canBuildType(p, t)) t = f + '_tank';
+      if (canBuildType(p, t)) queueItem(p, t);
+    }
+
+    // 5. 部隊指揮
+    const army = units.filter(u => u.weapon);
+    const idle = army.filter(u => u.order.t === 'idle' || (u.order.t === 'move' && !u.path.length));
+    // 防守
+    const myB = G.entities.filter(e => e.alive && e.owner === p.id && e.kind === 'bld');
+    let threat = null;
+    for (const e of G.entities) {
+      if (!e.alive || e.owner === p.id || e.kind !== 'unit') continue;
+      if (myB.some(b => dist(b.x, b.y, e.x, e.y) < 11)) { threat = e; break; }
+    }
+    if (threat && G.time - this.lastDefend > 4) {
+      this.lastDefend = G.time;
+      const def = army.filter(u => dist(u.x, u.y, cx, cy) < 20 && u.order.t !== 'attack');
+      cmdMove(def, threat.x, threat.y, true);
+    }
+    // 集結
+    for (const u of idle) {
+      if (dist(u.x, u.y, cx, cy) < 12 && dist(u.x, u.y, p.rally[0], p.rally[1]) > 4) {
+        const d = G.map.nearestPassable(p.rally[0] + (Math.random() - 0.5) * 4, p.rally[1] + (Math.random() - 0.5) * 4, 5);
+        if (d) { u.order = { t: 'move' }; u.pathTo(d[0] + 0.5, d[1] + 0.5); }
+      }
+    }
+    // 進攻
+    if (G.time > this.nextAttack && !threat) {
+      const ready = army.filter(u => u.order.t === 'idle' || u.order.t === 'move');
+      if (ready.length >= this.waveSize) {
+        const target = this.pickTarget(cx, cy);
+        if (target) {
+          cmdMove(ready, target.x, target.y, true);
+          this.nextAttack = G.time + this.cfg.interval;
+          this.waveSize = Math.min(24, this.waveSize + 2);
+        }
+      }
+    }
+  }
+  // 找敵方建築最密集處
+  superTarget() {
+    const eb = G.entities.filter(e => e.alive && e.owner !== this.p.id && e.kind === 'bld');
+    let best = null, bs = -1;
+    for (const b of eb) {
+      let s = 0;
+      for (const o of eb) if (dist(b.x, b.y, o.x, o.y) < 3.5) s += o.def.cost;
+      if (s > bs) { bs = s; best = [b.x, b.y]; }
+    }
+    return best;
+  }
+  pickTarget(cx, cy) {
+    const eb = G.entities.filter(e => e.alive && e.owner !== this.p.id && e.kind === 'bld');
+    if (!eb.length) return null;
+    // 偏好電廠與精煉廠,其次最近的建築
+    eb.sort((a, b) => {
+      const sa = dist(a.x, a.y, cx, cy) - (a.type === 'refinery' || a.type === 'power' ? 6 : 0);
+      const sb = dist(b.x, b.y, cx, cy) - (b.type === 'refinery' || b.type === 'power' ? 6 : 0);
+      return sa - sb;
+    });
+    return eb[Math.floor(Math.random() * Math.min(3, eb.length))];
+  }
+  onAttacked(t, attacker) {
+    if (G.time - this.lastDefend < 3) return;
+    this.lastDefend = G.time;
+    const army = G.entities.filter(e => e.alive && e.owner === this.p.id && e.kind === 'unit' && e.weapon &&
+      e.order.t !== 'attack' && dist(e.x, e.y, t.x, t.y) < 14);
+    cmdAttack(army, attacker);
+  }
+  findSpot(type) {
+    const p = this.p, d = BUILDINGS[type], m = G.map;
+    const [cx, cy] = this.baseCenter();
+    const en = this.enemy, es = G.map.starts[en.startIdx];
+    let best = null, bs = 1e9;
+    for (let ty = Math.floor(cy) - 12; ty <= cy + 12; ty++) for (let tx = Math.floor(cx) - 12; tx <= cx + 12; tx++) {
+      if (!canPlace(p, type, tx, ty)) continue;
+      // 四周保留一格通道
+      let ok = true, oreTiles = 0;
+      for (let y = ty - 1; y <= ty + d.h && ok; y++) for (let x = tx - 1; x <= tx + d.w; x++) {
+        if (m.inb(x, y) && m.bld[m.idx(x, y)]) { ok = false; break; }
+        if (m.inb(x, y) && m.oreType[m.idx(x, y)]) oreTiles++;
+      }
+      if (!ok) continue;
+      const mx = tx + d.w / 2, my = ty + d.h / 2;
+      let s = dist(mx, my, cx, cy) + oreTiles * 1.5 + Math.random() * 1.5;
+      if (type === 'refinery') {
+        let od = 1e9;
+        for (const f of m.oreFields) od = Math.min(od, dist(mx, my, f.x, f.y));
+        s += od * 1.2;
+      }
+      if (d.cat === 'def' && !d.super) {
+        const de = dist(mx, my, es.x, es.y);
+        s = Math.abs(dist(mx, my, cx, cy) - 6) * 2 + de * 0.3 + Math.random() * 3;
+      }
+      if (s < bs) { bs = s; best = [tx, ty]; }
+    }
+    return best;
+  }
+}
+</script>
+<script>
+'use strict';
+// ===== 等角像素渲染 =====
+const R = { camX: 0, camY: 0, ctx: null, cv: null, w: 0, h: 0, zs: 1, terrain: null, ox: MAP_H * HW };
+
+function P(x, y, z = 0) {
+  return [Math.round((x - y) * HW - R.camX), Math.round((x + y) * HH - R.camY - z * R.zs)];
+}
+function worldToScreen(x, y) { return P(x, y, 0); }
+function screenToWorld(sx, sy) {
+  const ix = sx + R.camX, iy = sy + R.camY;
+  return [(ix / HW + iy / HH) / 2, (iy / HH - ix / HW) / 2];
+}
+function centerCamera(x, y) {
+  R.camX = (x - y) * HW - R.w / 2;
+  R.camY = (x + y) * HH - R.h / 2;
+  clampCamera();
+}
+function clampCamera() {
+  const m = 40;
+  R.camX = clamp(R.camX, -MAP_H * HW - m, MAP_W * HW - R.w + m);
+  R.camY = clamp(R.camY, -m, (MAP_W + MAP_H) * HH - R.h + m + 40);
+}
+
+function poly(ctx, pts, fill) {
+  ctx.fillStyle = fill;
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath(); ctx.fill();
+}
+function line(ctx, a, b, col, w = 1) {
+  ctx.strokeStyle = col; ctx.lineWidth = w;
+  ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+}
+
+// 軸對齊的等角方塊
+function isoBox(ctx, x0, y0, x1, y1, z0, z1, col, topCol) {
+  poly(ctx, [P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z1), P(x0, y1, z1)], shade(col, 0.78));
+  poly(ctx, [P(x1, y0, z0), P(x1, y1, z0), P(x1, y1, z1), P(x1, y0, z1)], shade(col, 0.58));
+  poly(ctx, [P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)], topCol || col);
+}
+// 圓柱
+function isoCyl(ctx, cx, cy, r, z0, z1, col, topCol) {
+  const rx = r * HW * 1.414, ry = r * HH * 1.414;
+  const [bx, by] = P(cx, cy, z0), [tx, ty] = P(cx, cy, z1);
+  ctx.fillStyle = shade(col, 0.6);
+  ctx.beginPath(); ctx.ellipse(bx, by, rx, ry, 0, 0, Math.PI); ctx.fill();
+  ctx.fillRect(bx - rx, ty, rx * 2, by - ty);
+  ctx.fillStyle = shade(col, 0.8);
+  ctx.fillRect(bx - rx, ty, rx, by - ty);
+  ctx.beginPath(); ctx.ellipse(bx, by, rx, ry, 0, Math.PI / 2, Math.PI); ctx.fill();
+  ctx.fillStyle = topCol || col;
+  ctx.beginPath(); ctx.ellipse(tx, ty, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+}
+// 旋轉方塊(載具車身)
+function rotBox(ctx, cx, cy, ang, L, W, z0, z1, col, topCol) {
+  const c = Math.cos(ang), s = Math.sin(ang);
+  const loc = [[L / 2, W / 2], [L / 2, -W / 2], [-L / 2, -W / 2], [-L / 2, W / 2]];
+  const pts = loc.map(([lx, ly]) => [cx + lx * c - ly * s, cy + lx * s + ly * c]);
+  const faces = [];
+  for (let i = 0; i < 4; i++) {
+    const a = pts[i], b = pts[(i + 1) % 4];
+    const mx = (a[0] + b[0]) / 2 - cx, my = (a[1] + b[1]) / 2 - cy;
+    if (mx + my <= 0) continue; // 背面
+    const l = Math.hypot(mx, my) || 1;
+    faces.push({ a, b, f: 0.62 + 0.16 * (my - mx) / l, d: mx + my });
+  }
+  faces.sort((p, q) => p.d - q.d);
+  for (const fc of faces)
+    poly(ctx, [P(fc.a[0], fc.a[1], z0), P(fc.b[0], fc.b[1], z0), P(fc.b[0], fc.b[1], z1), P(fc.a[0], fc.a[1], z1)], shade(col, fc.f));
+  poly(ctx, pts.map(p => P(p[0], p[1], z1)), topCol || col);
+  return pts;
+}
+function shadow(ctx, x, y, rx, ry) {
+  const [sx, sy] = P(x, y, 0);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath(); ctx.ellipse(sx + 1, sy + 1, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+}
+function pix(ctx, x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), w, h); }
+
+// ===== 地形預渲染 =====
+const TERRAIN_COLS = {
+  [T_GRASS]: ['#4f7a35', '#5a8a3c', '#46702f', '#6a9a46'],
+  [T_SAND]: ['#b8a46a', '#c7b47a', '#a8945c', '#d2c08a'],
+  [T_WATER]: ['#1f4f7a', '#245a88', '#1b466d', '#3a77a8'],
+  [T_ROCK]: ['#6b665e', '#77726a', '#5d5850', '#86817a'],
+  [T_TREE]: ['#3f6a2b', '#4a7833', '#36602a', '#5a8a3c'],
+  [T_DIRT]: ['#7a6446', '#86704f', '#6c583d', '#957f5c']
+};
+function buildTerrain() {
+  const m = G.map;
+  const cv = document.createElement('canvas');
+  cv.width = (MAP_W + MAP_H) * HW; cv.height = (MAP_W + MAP_H) * HH + TH;
+  const ctx = cv.getContext('2d');
+  const rng = mulberry32(1234);
+  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+    const i = m.idx(x, y), t = m.terrain[i], cols = TERRAIN_COLS[t];
+    const cx = R.ox + (x - y) * HW, cy = (x + y) * HH;
+    const base = t === T_ROCK || t === T_TREE ? TERRAIN_COLS[T_GRASS] : cols;
+    ctx.fillStyle = base[m.variant[i] & 1];
+    ctx.beginPath(); ctx.moveTo(cx, cy - 0.5); ctx.lineTo(cx + HW + 0.5, cy + HH); ctx.lineTo(cx, cy + TH + 0.5); ctx.lineTo(cx - HW - 0.5, cy + HH); ctx.closePath(); ctx.fill();
+    // 像素雜點
+    const n = t === T_WATER ? 6 : 14;
+    for (let k = 0; k < n; k++) {
+      const u = rng(), v = rng();
+      const px = cx + (u - v) * HW, py = cy + (u + v) * HH;
+      ctx.fillStyle = base[2 + (rng() < 0.5 ? 0 : 1)];
+      ctx.fillRect(Math.round(px), Math.round(py), t === T_WATER ? 3 : 1, 1);
+    }
+    // 水岸泡沫
+    if (t === T_WATER) {
+      for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+        const nx = x + dx, ny = y + dy;
+        if (m.inb(nx, ny) && m.terrain[m.idx(nx, ny)] !== T_WATER) {
+          ctx.fillStyle = 'rgba(200,230,255,0.35)';
+          for (let k = 0; k < 6; k++) {
+            const u = dx === 0 ? rng() : (dx > 0 ? 0.92 : 0.05), v = dy === 0 ? rng() : (dy > 0 ? 0.92 : 0.05);
+            ctx.fillRect(Math.round(cx + (u - v) * HW), Math.round(cy + (u + v) * HH), 2, 1);
+          }
+        }
+      }
+    }
+  }
+  R.terrain = cv;
+  // 地物(樹、岩石)
+  R.doodads = [];
+  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+    const t = m.terrain[m.idx(x, y)];
+    if (t === T_TREE || t === T_ROCK) R.doodads.push({ kind: 'doodad', t, x: x + 0.5, y: y + 0.5, v: m.variant[m.idx(x, y)] });
+  }
+}
+
+function drawDoodad(ctx, d) {
+  const [sx, sy] = P(d.x, d.y, 0);
+  if (d.t === T_TREE) {
+    const h = 10 + (d.v % 6), ox = (d.v >> 3) % 5 - 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(sx + 3, sy + 1, 8, 3, 0, 0, 7); ctx.fill();
+    pix(ctx, sx + ox - 1, sy - 5, 2, 6, '#4a3020');
+    const greens = ['#2f5a24', '#3b6e2c', '#4b8236', '#5c9640'];
+    for (let k = 0; k < 4; k++) {
+      ctx.fillStyle = greens[k];
+      const r = 7 - k * 1.4;
+      ctx.beginPath(); ctx.arc(sx + ox - k * 0.6, sy - h + 2 - k * 2.4, r, 0, 7); ctx.fill();
+    }
+    pix(ctx, sx + ox - 3, sy - h - 5, 2, 1, '#7ab055');
+  } else {
+    const s = 0.7 + (d.v % 4) * 0.1;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(sx + 2, sy + 1, 14 * s, 5 * s, 0, 0, 7); ctx.fill();
+    poly(ctx, [[sx - 13 * s, sy], [sx - 8 * s, sy - 10 * s], [sx + 1, sy - 15 * s], [sx + 10 * s, sy - 8 * s], [sx + 13 * s, sy + 1], [sx, sy + 5 * s]], '#6f6a62');
+    poly(ctx, [[sx - 8 * s, sy - 10 * s], [sx + 1, sy - 15 * s], [sx + 10 * s, sy - 8 * s], [sx + 1, sy - 5 * s]], '#8c877e');
+    poly(ctx, [[sx + 1, sy - 5 * s], [sx + 10 * s, sy - 8 * s], [sx + 13 * s, sy + 1], [sx, sy + 5 * s]], '#56524b');
+  }
+}
+
+// ===== 礦物 =====
+function drawOre(ctx, x0, y0, x1, y1) {
+  const m = G.map, p = me();
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    if (!m.inb(x, y)) continue;
+    const i = m.idx(x, y);
+    if (!m.oreType[i] || m.ore[i] < 15 || !p.explored[i]) continue;
+    const [cx, cy] = P(x + 0.5, y + 0.5, 0);
+    const v = m.variant[i], amt = m.ore[i] / 800;
+    const gem = m.oreType[i] === 2;
+    const n = 2 + Math.floor(amt * 5);
+    for (let k = 0; k < n; k++) {
+      const a = (v * 7 + k * 53) % 100 / 100, b = (v * 13 + k * 29) % 100 / 100;
+      const px = cx + (a - b) * HW * 0.8, py = cy + (a + b - 1) * HH * 0.8;
+      const h = 2 + ((v + k * 3) % 4);
+      const c1 = gem ? '#5fd0ff' : '#e0a83a', c2 = gem ? '#b6f0ff' : '#ffd77a', c3 = gem ? '#2a6ea0' : '#8a5a1a';
+      pix(ctx, px - 1, py - h, 2, h, c1);
+      pix(ctx, px - 1, py - h, 1, 1, c2);
+      pix(ctx, px + 1, py - h + 1, 1, h - 1, c3);
+    }
+  }
+}
+
+// ===== 單位 =====
+function drawUnit(ctx, u) {
+  const d = u.def, lk = d.look, col = G.players[u.owner].color;
+  if (lk.kind === 'inf') { drawInf(ctx, u, col); return; }
+  const bob = u.moving ? Math.sin(u.anim * 3) * 0.3 : 0;
+  shadow(ctx, u.x, u.y, lk.L * 14, lk.L * 7);
+  if (lk.kind === 'harv') {
+    // 履帶
+    rotBox(ctx, u.x, u.y, u.dir, lk.L, lk.W, 0, 3, '#3a3a3a');
+    rotBox(ctx, u.x, u.y, u.dir, lk.L * 0.92, lk.W * 0.85, 3, lk.H, '#c8a030', '#d8b040');
+    // 駕駛艙
+    const c = Math.cos(u.dir), s = Math.sin(u.dir);
+    rotBox(ctx, u.x + c * lk.L * 0.3, u.y + s * lk.L * 0.3, u.dir, lk.L * 0.3, lk.W * 0.7, lk.H, lk.H + 4, col);
+    // 礦斗
+    const fill = u.cargo / HARV_CAP;
+    rotBox(ctx, u.x - c * lk.L * 0.15, u.y - s * lk.L * 0.15, u.dir, lk.L * 0.5, lk.W * 0.75, lk.H, lk.H + 2, '#5a5a5a', fill > 0.05 ? (fill > 0.6 ? '#e8b040' : '#a88038') : '#3a3a3a');
+    if (u.hstate === 'harvest' && Math.sin(u.anim * 4) > 0) {
+      const [fx, fy] = P(u.x + c * lk.L * 0.55, u.y + s * lk.L * 0.55, 2);
+      pix(ctx, fx - 1, fy - 1, 2, 2, '#ffd77a');
+    }
+    return;
+  }
+  const z0 = 1 + bob;
+  // 履帶/輪子
+  rotBox(ctx, u.x, u.y, u.dir, lk.L, lk.W, z0 - 1, z0 + 2, lk.wheels ? '#2c2c2c' : '#3b3b36');
+  rotBox(ctx, u.x, u.y, u.dir, lk.L * 0.9, lk.W * 0.8, z0 + 2, z0 + lk.H, col, shade(col, 1.12));
+  // 砲塔
+  const tz = z0 + lk.H, tc = Math.cos(u.tdir), ts = Math.sin(u.tdir);
+  const tx = u.x, ty = u.y;
+  const recoil = u.cool > (u.weapon ? u.weapon.rof - 0.15 : 0) ? -0.06 : 0;
+  switch (lk.tur) {
+    case 'mg':
+      rotBox(ctx, tx, ty, u.tdir, 0.25, 0.22, tz, tz + 3, '#555');
+      line(ctx, P(tx, ty, tz + 2), P(tx + tc * 0.4, ty + ts * 0.4, tz + 2), '#222', 1);
+      break;
+    case 'laser': {
+      rotBox(ctx, tx - tc * 0.05, ty - ts * 0.05, u.tdir, 0.42, 0.34, tz, tz + 4, shade(col, 0.85), shade(col, 1.05));
+      line(ctx, P(tx, ty, tz + 2), P(tx + tc * (0.55 + recoil), ty + ts * (0.55 + recoil), tz + 2), '#3a3a3a', 2);
+      const [ex, ey] = P(tx + tc * 0.55, ty + ts * 0.55, tz + 2);
+      pix(ctx, ex - 1, ey - 1, 2, 2, (G.time * 4 + u.id) % 2 < 1 ? '#ff6a7a' : '#ff3048');
+      break;
+    }
+    case 'lance': {
+      rotBox(ctx, tx - tc * 0.15, ty - ts * 0.15, u.tdir, 0.4, 0.4, tz, tz + 3, '#666');
+      const [ex, ey] = P(tx + tc * 0.1, ty + ts * 0.1, tz + 8);
+      line(ctx, P(tx - tc * 0.1, ty - ts * 0.1, tz + 3), [ex, ey], '#444', 2);
+      ctx.fillStyle = '#9aa'; ctx.beginPath(); ctx.ellipse(ex, ey, 5, 3, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = '#ff4060'; ctx.beginPath(); ctx.ellipse(ex, ey, 2, 1.3, 0, 0, 7); ctx.fill();
+      break;
+    }
+    case 'cannon':
+      rotBox(ctx, tx - tc * 0.08, ty - ts * 0.08, u.tdir, 0.5, 0.45, tz, tz + 4, shade(col, 0.8), shade(col, 1.0));
+      line(ctx, P(tx + tc * 0.15, ty + ts * 0.15, tz + 2), P(tx + tc * (0.75 + recoil), ty + ts * (0.75 + recoil), tz + 2), '#262626', 2);
+      break;
+    case 'rail': {
+      rotBox(ctx, tx - tc * 0.1, ty - ts * 0.1, u.tdir, 0.35, 0.36, tz, tz + 3, '#555');
+      const px = -ts * 0.07, py = tc * 0.07;
+      for (const k of [-1, 1]) line(ctx, P(tx + px * k, ty + py * k, tz + 3), P(tx + tc * 0.85 + px * k, ty + ts * 0.85 + py * k, tz + 3), '#8aa', 1);
+      const [ex, ey] = P(tx + tc * 0.4, ty + ts * 0.4, tz + 3);
+      pix(ctx, ex - 1, ey - 1, 2, 2, '#9fe3ff');
+      break;
+    }
+  }
+}
+
+function drawInf(ctx, u, col) {
+  const [sx, sy] = P(u.x, u.y, 0);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(sx - 3, sy - 1, 6, 2);
+  const step = u.moving ? Math.sin(u.anim * 2) : 0;
+  const fx = Math.cos(u.dir) - Math.sin(u.dir), fy = (Math.cos(u.dir) + Math.sin(u.dir)) / 2;
+  const fl = Math.hypot(fx, fy) || 1, dx = fx / fl, dy = fy / fl;
+  // 腿
+  pix(ctx, sx - 2, sy - 4, 1, 4 - (step > 0 ? 1 : 0), '#2a2a2a');
+  pix(ctx, sx + 1, sy - 4, 1, 4 - (step < 0 ? 1 : 0), '#2a2a2a');
+  // 身體
+  pix(ctx, sx - 2, sy - 9, 4, 5, col);
+  pix(ctx, sx - 2, sy - 9, 1, 5, shade(col, 1.25));
+  pix(ctx, sx + 1, sy - 9, 1, 5, shade(col, 0.7));
+  // 頭
+  pix(ctx, sx - 1, sy - 11, 3, 2, '#e3b98f');
+  pix(ctx, sx - 1, sy - 12, 3, 1, shade(col, 0.6));
+  if (u.def.look.gun === 'none') {
+    // 工程師:黃色安全帽與工具包
+    pix(ctx, sx - 2, sy - 13, 4, 2, '#f0c020');
+    pix(ctx, sx + dx * 2 - 1, sy - 6 + dy * 2, 3, 2, '#8a6a30');
+    return;
+  }
+  // 武器
+  const gl = u.def.look.gun === 'rocket' ? 6 : 5;
+  const gx = sx + dx * 1.5, gy = sy - 7 + dy * 1.5;
+  line(ctx, [gx, gy], [gx + dx * gl, gy + dy * gl], u.def.look.gun === 'rocket' ? '#5a6040' : '#222', u.def.look.gun === 'rocket' ? 2 : 1);
+  if (u.def.look.gun === 'laser') pix(ctx, gx + dx * gl - 0.5, gy + dy * gl - 0.5, 1, 1, '#ff4060');
+  if (u.weapon && u.cool > u.weapon.rof - 0.08) pix(ctx, gx + dx * (gl + 1) - 1, gy + dy * (gl + 1) - 1, 2, 2, '#fff2a0');
+}
+
+// ===== 建築 =====
+function drawBuilding(ctx, b) {
+  const col = G.players[b.owner].color;
+  const x0 = b.tx, y0 = b.ty, x1 = b.tx + b.w, y1 = b.ty + b.h;
+  R.zs = b.prog < 1 ? b.prog : 1;
+  const conc = '#8e939a', dark = '#5c6168', t = G.time + b.anim;
+  const damaged = b.hp / b.maxHp < 0.5;
+  // 地基
+  isoBox(ctx, x0 + 0.05, y0 + 0.05, x1 - 0.05, y1 - 0.05, 0, 2, '#6e7278', '#7d8288');
+  switch (b.type) {
+    case 'conyard': {
+      isoBox(ctx, x0 + 0.3, y0 + 0.3, x1 - 0.9, y1 - 0.9, 2, 18, conc, '#a3a8af');
+      isoBox(ctx, x0 + 0.28, y0 + 0.28, x1 - 0.88, y1 - 0.88, 12, 15, col);
+      isoBox(ctx, x0 + 0.6, y0 + 0.6, x0 + 1.5, y0 + 1.5, 18, 24, '#9aa0a8', '#b5bbc2');
+      // 起重機
+      isoBox(ctx, x1 - 0.55, y0 + 0.35, x1 - 0.35, y0 + 0.55, 2, 38, '#d0a020', '#e8c040');
+      const ang = Math.sin(t * 0.3) * 0.8 + 2.4;
+      line(ctx, P(x1 - 0.45, y0 + 0.45, 38), P(x1 - 0.45 + Math.cos(ang) * 1.8, y0 + 0.45 + Math.sin(ang) * 1.8, 38), '#e8c040', 2);
+      // 停機坪
+      poly(ctx, [P(x1 - 0.85, y1 - 0.85, 2), P(x1 - 0.1, y1 - 0.85, 2), P(x1 - 0.1, y1 - 0.1, 2), P(x1 - 0.85, y1 - 0.1, 2)], '#505458');
+      const [hx, hy] = P(x1 - 0.47, y1 - 0.47, 2);
+      pix(ctx, hx - 3, hy - 1, 6, 1, '#e8e8e8'); pix(ctx, hx - 3, hy - 3, 1, 5, '#e8e8e8'); pix(ctx, hx + 2, hy - 3, 1, 5, '#e8e8e8');
+      // 天線燈
+      if (Math.sin(t * 4) > 0) { const [lx, ly] = P(x1 - 0.45, y0 + 0.45, 39); pix(ctx, lx - 1, ly - 1, 2, 2, '#ff3030'); }
+      break;
+    }
+    case 'power': {
+      isoBox(ctx, x0 + 0.2, y0 + 0.2, x1 - 0.2, y1 - 0.2, 2, 8, conc, '#a3a8af');
+      isoBox(ctx, x0 + 0.18, y0 + 0.18, x1 - 0.18, y1 - 0.18, 5, 7, col);
+      isoCyl(ctx, b.x, b.y, 0.55, 8, 16, '#b0b5bc', '#c8cdd4');
+      const glow = 0.6 + 0.4 * Math.sin(t * 3);
+      const [gx, gy] = P(b.x, b.y, 16);
+      ctx.fillStyle = `rgba(90,230,255,${0.5 + 0.4 * glow})`;
+      ctx.beginPath(); ctx.ellipse(gx, gy, 9, 4.5, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = '#e8fbff'; ctx.beginPath(); ctx.ellipse(gx, gy, 4, 2, 0, 0, 7); ctx.fill();
+      isoCyl(ctx, x0 + 0.4, y1 - 0.4, 0.15, 8, 20, '#777');
+      if (!G.players[b.owner].lowPower && Math.random() < 0.05) G.effects.push({ k: 'smoke', x: x0 + 0.4, y: y1 - 0.4, z: 20, t: 0, dur: 1.2, light: true });
+      break;
+    }
+    case 'refinery': {
+      isoBox(ctx, x0 + 0.2, y0 + 0.2, x1 - 1.1, y1 - 0.3, 2, 16, conc, '#a3a8af');
+      isoBox(ctx, x0 + 0.18, y0 + 0.18, x1 - 1.08, y1 - 0.28, 10, 13, col);
+      isoCyl(ctx, x1 - 0.55, y0 + 0.6, 0.35, 2, 22, '#a8adb4', shade(col, 1.1));
+      isoCyl(ctx, x1 - 0.55, y0 + 1.5, 0.35, 2, 22, '#a8adb4', shade(col, 1.1));
+      // 卸載口
+      isoBox(ctx, x1 - 0.5, y0 + 1.1, x1 + 0.05, y0 + 1.9, 2, 5, '#4a4e54');
+      isoBox(ctx, x0 + 0.5, y0 + 0.5, x0 + 1.0, y0 + 1.0, 16, 26, '#777c83');
+      if (Math.random() < 0.06) G.effects.push({ k: 'smoke', x: x0 + 0.75, y: y0 + 0.75, z: 26, t: 0, dur: 1.5 });
+      break;
+    }
+    case 'barracks': {
+      isoBox(ctx, x0 + 0.2, y0 + 0.2, x1 - 0.2, y1 - 0.2, 2, 12, '#7d8a6a', '#8e9c7a');
+      isoBox(ctx, x0 + 0.18, y0 + 0.18, x1 - 0.18, y1 - 0.18, 9, 11, col);
+      // 門
+      poly(ctx, [P(x0 + 0.7, y1 - 0.2, 2), P(x0 + 1.3, y1 - 0.2, 2), P(x0 + 1.3, y1 - 0.2, 8), P(x0 + 0.7, y1 - 0.2, 8)], '#2a2d30');
+      // 旗
+      line(ctx, P(x0 + 0.4, y0 + 0.4, 12), P(x0 + 0.4, y0 + 0.4, 28), '#ccc', 1);
+      const [fx, fy] = P(x0 + 0.4, y0 + 0.4, 28);
+      const wv = Math.sin(t * 5) > 0 ? 1 : 0;
+      pix(ctx, fx + 1, fy + wv, 8, 5, col); pix(ctx, fx + 1, fy + wv, 8, 1, shade(col, 1.3));
+      break;
+    }
+    case 'factory': {
+      isoBox(ctx, x0 + 0.2, y0 + 0.2, x1 - 0.2, y1 - 0.2, 2, 20, conc, '#a3a8af');
+      isoBox(ctx, x0 + 0.18, y0 + 0.18, x1 - 0.18, y1 - 0.18, 16, 19, col);
+      // 車庫門
+      poly(ctx, [P(x0 + 0.8, y1 - 0.2, 2), P(x1 - 0.8, y1 - 0.2, 2), P(x1 - 0.8, y1 - 0.2, 13), P(x0 + 0.8, y1 - 0.2, 13)], '#33373b');
+      for (let k = 0; k < 4; k++) line(ctx, P(x0 + 0.8, y1 - 0.2, 4 + k * 2.5), P(x1 - 0.8, y1 - 0.2, 4 + k * 2.5), '#4a4f55', 1);
+      isoBox(ctx, x0 + 0.5, y0 + 0.5, x0 + 1.2, y0 + 1.2, 20, 25, '#6a6f75');
+      isoBox(ctx, x0 + 1.6, y0 + 0.5, x0 + 2.3, y0 + 1.2, 20, 25, '#6a6f75');
+      break;
+    }
+    case 'tech': {
+      isoBox(ctx, x0 + 0.2, y0 + 0.2, x1 - 0.2, y1 - 0.2, 2, 14, '#c8ccd2', '#dde1e6');
+      isoBox(ctx, x0 + 0.18, y0 + 0.18, x1 - 0.18, y1 - 0.18, 4, 6, col);
+      // 碟形天線
+      const a = t * 0.8;
+      line(ctx, P(b.x, b.y, 14), P(b.x, b.y, 22), '#777', 2);
+      const [dx, dy] = P(b.x, b.y, 24);
+      ctx.fillStyle = '#e8ecf0'; ctx.beginPath(); ctx.ellipse(dx, dy, 9 * Math.abs(Math.cos(a)) + 2, 5, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = '#9aa'; ctx.beginPath(); ctx.ellipse(dx, dy, 3 * Math.abs(Math.cos(a)) + 1, 2, 0, 0, 7); ctx.fill();
+      if (Math.sin(t * 6) > 0.3) { const [lx, ly] = P(x1 - 0.4, y0 + 0.4, 18); pix(ctx, lx, ly, 2, 2, '#40ff80'); }
+      line(ctx, P(x1 - 0.4, y0 + 0.4, 14), P(x1 - 0.4, y0 + 0.4, 18), '#888', 1);
+      break;
+    }
+    case 'ac_super': {
+      isoBox(ctx, x0 + 0.15, y0 + 0.15, x1 - 0.15, y1 - 0.15, 2, 8, '#4a5058', '#5c636c');
+      isoBox(ctx, x0 + 0.13, y0 + 0.13, x1 - 0.13, y1 - 0.13, 5, 7, col);
+      // 相位陣列天線
+      const ready = b.charge >= b.def.charge;
+      const tilt = 6 + Math.sin(t * 0.5) * 1;
+      poly(ctx, [P(x0 + 0.4, y0 + 0.4, 8 + tilt * 2), P(x1 - 0.4, y0 + 0.4, 8 + tilt * 2), P(x1 - 0.3, y1 - 0.3, 10), P(x0 + 0.3, y1 - 0.3, 10)], '#2a3a55');
+      for (let k = 1; k < 4; k++) {
+        const f = k / 4;
+        line(ctx, P(x0 + 0.4 + f * (x1 - x0 - 0.8), y0 + 0.4, 8 + tilt * 2), P(x0 + 0.3 + f * (x1 - x0 - 0.6), y1 - 0.3, 10), '#5a7aa8', 1);
+      }
+      line(ctx, P(b.x, b.y, 10), P(b.x, b.y, 34), '#999', 2);
+      const [lx, ly] = P(b.x, b.y, 35);
+      const pulse = ready ? (Math.sin(t * 8) > 0 ? '#ff3048' : '#ff9aa8') : shade('#ff3048', 0.4 + 0.6 * (b.charge / b.def.charge));
+      pix(ctx, lx - 2, ly - 2, 4, 4, pulse);
+      if (ready) { ctx.fillStyle = 'rgba(255,48,72,0.3)'; ctx.beginPath(); ctx.arc(lx, ly, 7, 0, 7); ctx.fill(); }
+      break;
+    }
+    case 'ep_super': {
+      isoBox(ctx, x0 + 0.15, y0 + 0.15, x1 - 0.15, y1 - 0.15, 2, 6, '#4a5058', '#5c636c');
+      isoBox(ctx, x0 + 0.13, y0 + 0.13, x1 - 0.13, y1 - 0.13, 3, 5, col);
+      // 導彈井蓋
+      const ready = b.charge >= b.def.charge;
+      const open = ready ? 0.35 : 0;
+      poly(ctx, [P(x0 + 0.4, y0 + 0.4, 6), P(x1 - 0.4, y0 + 0.4, 6), P(x1 - 0.4, y1 - 0.4, 6), P(x0 + 0.4, y1 - 0.4, 6)], '#1a1c1e');
+      isoBox(ctx, x0 + 0.4 - open, y0 + 0.4, b.x - open, y1 - 0.4, 6, 8, '#6a7078');
+      isoBox(ctx, b.x + open, y0 + 0.4, x1 - 0.4 + open, y1 - 0.4, 6, 8, '#6a7078');
+      if (ready) {
+        isoCyl(ctx, b.x, b.y, 0.12, 6, 22, '#d8dde2', '#ff4030');
+      }
+      const [hx, hy] = P(x0 + 0.25, y1 - 0.25, 6);
+      pix(ctx, hx - 2, hy - 1, 5, 2, ready && Math.sin(t * 8) > 0 ? '#ff3030' : '#f0c020');
+      break;
+    }
+    case 'ac_turret': case 'ep_turret': {
+      isoBox(ctx, x0 + 0.15, y0 + 0.15, x1 - 0.15, y1 - 0.15, 2, 9, dark, '#787d84');
+      isoBox(ctx, x0 + 0.13, y0 + 0.13, x1 - 0.13, y1 - 0.13, 6, 8, col);
+      const c = Math.cos(b.tdir), s = Math.sin(b.tdir);
+      if (b.type === 'ac_turret') {
+        isoCyl(ctx, b.x, b.y, 0.22, 9, 14, '#9aa0a8', '#b8bec6');
+        line(ctx, P(b.x, b.y, 14), P(b.x + c * 0.5, b.y + s * 0.5, 15), '#444', 3);
+        const [ex, ey] = P(b.x + c * 0.5, b.y + s * 0.5, 15);
+        const on = !G.players[b.owner].lowPower;
+        pix(ctx, ex - 1, ey - 1, 3, 3, on ? '#ff3048' : '#552030');
+        if (on) { ctx.fillStyle = 'rgba(255,60,80,0.25)'; ctx.beginPath(); ctx.arc(ex, ey, 4, 0, 7); ctx.fill(); }
+      } else {
+        rotBox(ctx, b.x, b.y, b.tdir, 0.45, 0.4, 9, 14, '#6f757c', '#8a9097');
+        const px = -s * 0.08, py = c * 0.08;
+        for (const k of [-1, 1]) line(ctx, P(b.x + px * k, b.y + py * k, 13), P(b.x + c * 0.7 + px * k, b.y + s * 0.7 + py * k, 13), '#9ab', 1);
+        const [ex, ey] = P(b.x + c * 0.15, b.y + s * 0.15, 14);
+        pix(ctx, ex - 1, ey - 1, 2, 2, G.players[b.owner].lowPower ? '#345' : '#9fe3ff');
+      }
+      break;
+    }
+  }
+  R.zs = 1;
+  if (damaged && b.prog >= 1 && Math.random() < 0.15) {
+    G.effects.push({ k: 'smoke', x: b.tx + Math.random() * b.w, y: b.ty + Math.random() * b.h, z: 12, t: 0, dur: 1.4 });
+    if (Math.random() < 0.3) G.effects.push({ k: 'fire', x: b.tx + Math.random() * b.w, y: b.ty + Math.random() * b.h, z: 8, t: 0, dur: 0.5 });
+  }
+}
+
+// ===== 生命條與選取框 =====
+function drawHealth(ctx, e, sel) {
+  let sx, sy, wpx;
+  if (e.kind === 'bld') {
+    [sx, sy] = P(e.tx, e.ty, 0); sy -= 30; wpx = (e.w + e.h) * 6;
+    sx -= wpx / 2 - (e.w - e.h) * HW / 2;
+    const [tx, ty] = P(e.tx + e.w / 2, e.ty, 0);
+    sx = tx - wpx / 2; sy = ty - 30;
+  } else {
+    const z = e.def.cat === 'inf' ? 15 : (e.def.look.H || 5) + 12;
+    [sx, sy] = P(e.x, e.y, z); wpx = e.def.cat === 'inf' ? 10 : 18; sx -= wpx / 2;
+  }
+  const f = e.hp / e.maxHp;
+  ctx.fillStyle = '#000'; ctx.fillRect(Math.round(sx) - 1, Math.round(sy) - 1, wpx + 2, 4);
+  ctx.fillStyle = f > 0.5 ? '#3cdc3c' : f > 0.25 ? '#f0d020' : '#e83020';
+  const segs = Math.ceil(wpx / 3), filled = Math.ceil(segs * f);
+  for (let i = 0; i < filled; i++) ctx.fillRect(Math.round(sx) + i * 3, Math.round(sy), 2, 2);
+  if (e.kind === 'unit' && e.def.harvester && sel) {
+    ctx.fillStyle = '#e8b040';
+    const c = Math.ceil(segs * e.cargo / HARV_CAP);
+    for (let i = 0; i < c; i++) ctx.fillRect(Math.round(sx) + i * 3, Math.round(sy) + 3, 2, 1);
+  }
+  if (sel) {
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+    if (e.kind === 'bld') {
+      const pts = [P(e.tx, e.ty, 0), P(e.tx + e.w, e.ty, 0), P(e.tx + e.w, e.ty + e.h, 0), P(e.tx, e.ty + e.h, 0)];
+      ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0] + 0.5, p[1] + 0.5) : ctx.moveTo(p[0] + 0.5, p[1] + 0.5)); ctx.closePath(); ctx.stroke();
+    } else {
+      const [cx, cy] = P(e.x, e.y, 0);
+      const r = e.def.cat === 'inf' ? 5 : 11;
+      ctx.beginPath(); ctx.ellipse(cx + 0.5, cy + 0.5, r, r / 2, 0, 0, 7); ctx.stroke();
+    }
+  }
+  if (e.kind === 'bld' && e.repairing) {
+    const [cx, cy] = P(e.x, e.y, 30);
+    if (Math.sin(G.time * 6) > 0) { pix(ctx, cx - 3, cy - 1, 7, 3, '#40e040'); pix(ctx, cx - 1, cy - 3, 3, 7, '#40e040'); }
+  }
+}
+
+// ===== 特效 =====
+function drawEffect(ctx, f) {
+  const k = f.t / f.dur;
+  if (f.t < 0) return;
+  switch (f.k) {
+    case 'beam': {
+      const a = P(f.x1, f.y1, f.z1), b = P(f.x2, f.y2, f.z2);
+      ctx.globalAlpha = (1 - k) * 0.35;
+      line(ctx, a, b, f.c, f.w + 5);
+      ctx.globalAlpha = 1 - k;
+      line(ctx, a, b, f.c, f.w + 2);
+      ctx.globalAlpha = (1 - k) * 0.9;
+      line(ctx, a, b, '#ffe8ec', Math.max(1, f.w - 1));
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 'rail': {
+      const a = P(f.x1, f.y1, f.z1), b = P(f.x2, f.y2, f.z2);
+      ctx.globalAlpha = 1 - k;
+      line(ctx, a, b, f.c, k < 0.2 ? 3 : 1);
+      ctx.globalAlpha = (1 - k) * 0.5;
+      // 螺旋殘影
+      const n = 10;
+      for (let i = 0; i <= n; i++) {
+        const u = i / n, x = a[0] + (b[0] - a[0]) * u, y = a[1] + (b[1] - a[1]) * u + Math.sin(u * 20 + k * 8) * 2;
+        pix(ctx, x, y, 1, 1, '#ffffff');
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 'spark': {
+      const [x, y] = P(f.x, f.y, f.z);
+      const r = 1 + k * 4;
+      ctx.globalAlpha = 1 - k;
+      pix(ctx, x - r, y, r * 2, 1, f.c); pix(ctx, x, y - r, 1, r * 2, f.c);
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 'glow': {
+      const [x, y] = P(f.x, f.y, f.z);
+      ctx.fillStyle = f.c; ctx.globalAlpha = 0.6 * (1 - k);
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+      break;
+    }
+    case 'flash': {
+      const [x, y] = P(f.x, f.y, f.z);
+      pix(ctx, x - 2, y - 2, 4, 4, '#fff4b0');
+      break;
+    }
+    case 'expl': {
+      const [x, y] = P(f.x, f.y, 0);
+      const s = f.size, r = (4 + k * 14) * s;
+      ctx.globalAlpha = 1 - k;
+      ctx.fillStyle = k < 0.3 ? '#fff6c0' : '#ff9a20';
+      ctx.beginPath(); ctx.arc(x, y - r * 0.6, r, 0, 7); ctx.fill();
+      ctx.fillStyle = k < 0.5 ? '#ffcf40' : '#c04010';
+      ctx.beginPath(); ctx.arc(x, y - r * 0.6, r * 0.6, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 'part': {
+      const [x, y] = P(f.x, f.y, f.z);
+      ctx.globalAlpha = 1 - k; pix(ctx, x, y, 2, 2, f.c); ctx.globalAlpha = 1;
+      break;
+    }
+    case 'smoke': {
+      const [x, y] = P(f.x, f.y, f.z);
+      ctx.globalAlpha = (1 - k) * 0.45;
+      ctx.fillStyle = f.light ? '#e8eef2' : '#444';
+      ctx.beginPath(); ctx.arc(x, y, 2 + k * 6, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 'fire': {
+      const [x, y] = P(f.x, f.y, f.z);
+      ctx.globalAlpha = 1 - k;
+      pix(ctx, x - 1, y - 4 - k * 6, 3, 4, k < 0.5 ? '#ffd040' : '#ff6020');
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 'shock': {
+      const [x, y] = P(f.x, f.y, 0);
+      const r = 10 + k * 90;
+      ctx.strokeStyle = '#fff2c0'; ctx.globalAlpha = 1 - k; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(x, y, r, r / 2, 0, 0, 7); ctx.stroke();
+      ctx.fillStyle = '#ffffff'; ctx.globalAlpha = Math.max(0, 0.5 - k);
+      ctx.fillRect(0, 0, R.w, R.h);
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 'marker': {
+      const [x, y] = P(f.x, f.y, 0);
+      const r = 10 * (1 - k);
+      ctx.strokeStyle = f.c; ctx.lineWidth = 1; ctx.globalAlpha = 1 - k;
+      ctx.beginPath(); ctx.ellipse(x, y, r, r / 2, 0, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+      break;
+    }
+  }
+}
+function drawGroundEffect(ctx, f) {
+  const k = f.t / f.dur;
+  if (f.k === 'scorch') {
+    const [x, y] = P(f.x, f.y, 0);
+    ctx.fillStyle = `rgba(20,15,10,${0.5 * (1 - k)})`;
+    ctx.beginPath(); ctx.ellipse(x, y, f.r * HW * 1.4, f.r * HH * 1.4, 0, 0, 7); ctx.fill();
+  } else if (f.k === 'corpse') {
+    const [x, y] = P(f.x, f.y, 0);
+    ctx.globalAlpha = 1 - k; pix(ctx, x - 3, y - 1, 6, 2, shade(f.c, 0.6)); pix(ctx, x + 3, y - 1, 2, 2, '#c09070'); ctx.globalAlpha = 1;
+  } else if (f.k === 'wreck') {
+    ctx.globalAlpha = Math.min(1, (1 - k) * 2);
+    rotBox(ctx, f.x, f.y, f.dir, f.L, f.W, 0, 3, '#2a2724', '#35312c');
+    ctx.globalAlpha = 1;
+    if (Math.random() < 0.1 && k < 0.6) G.effects.push({ k: 'smoke', x: f.x, y: f.y, z: 4, t: 0, dur: 1.2 });
+  }
+}
+function drawProj(ctx, p) {
+  const k = p.t / p.dur;
+  const arc = p.k === 'missile' ? Math.sin(k * Math.PI) * 18 : p.k === 'shell' ? Math.sin(k * Math.PI) * 4 : 0;
+  const x = p.x0 + (p.x1 - p.x0) * k, y = p.y0 + (p.y1 - p.y0) * k, z = p.z0 + (p.z1 - p.z0) * k + arc;
+  const [sx, sy] = P(x, y, z);
+  if (p.k === 'bullet') {
+    const k2 = Math.max(0, k - 0.15);
+    const [bx, by] = P(p.x0 + (p.x1 - p.x0) * k2, p.y0 + (p.y1 - p.y0) * k2, p.z0 + (p.z1 - p.z0) * k2);
+    line(ctx, [bx, by], [sx, sy], p.c, 1);
+  } else if (p.k === 'shell') {
+    pix(ctx, sx - 1, sy - 1, 2, 2, '#ffe080');
+  } else {
+    pix(ctx, sx - 1, sy - 1, 3, 2, '#ddd'); pix(ctx, sx - 1, sy, 1, 1, '#ff8030');
+  }
+}
+
+// ===== 超級武器 / 老兵 =====
+function drawStrike(ctx, s) {
+  if (s.k === 'orbital') {
+    const [gx, gy] = P(s.cx, s.cy, 0);
+    if (s.t < 1) {
+      // 瞄準光束
+      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(s.t * 30);
+      line(ctx, [gx, gy], [gx, -10], '#ff8090', 1);
+      ctx.strokeStyle = '#ff3048'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(gx, gy, 50 * (1 - s.t) + 10, (50 * (1 - s.t) + 10) / 2, 0, 0, 7); ctx.stroke();
+      ctx.globalAlpha = 1;
+      return;
+    }
+    const fade = Math.min(1, (s.dur - s.t) / 0.5);
+    const w = (14 + Math.sin(s.t * 25) * 3) * fade;
+    ctx.globalAlpha = 0.35 * fade; ctx.fillStyle = '#ff3048';
+    ctx.fillRect(gx - w * 1.6, -10, w * 3.2, gy + 10);
+    ctx.beginPath(); ctx.ellipse(gx, gy, w * 3, w * 1.5, 0, 0, 7); ctx.fill();
+    ctx.globalAlpha = 0.9 * fade; ctx.fillStyle = '#ff6070';
+    ctx.fillRect(gx - w / 2, -10, w, gy + 10);
+    ctx.fillStyle = '#fff0f2';
+    ctx.fillRect(gx - w / 5, -10, w / 2.5, gy + 10);
+    ctx.beginPath(); ctx.ellipse(gx, gy, w * 1.4, w * 0.7, 0, 0, 7); ctx.fill();
+    ctx.globalAlpha = 1;
+  } else {
+    const [gx, gy] = P(s.x, s.y, 0);
+    // 目標標記
+    if (Math.sin(s.t * 14) > 0) {
+      ctx.strokeStyle = '#ff3030'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(gx, gy, 3.2 * HW * 1.4, 3.2 * HH * 1.4, 0, 0, 7); ctx.stroke();
+      line(ctx, [gx - 8, gy], [gx + 8, gy], '#ff3030', 1); line(ctx, [gx, gy - 4], [gx, gy + 4], '#ff3030', 1);
+    }
+    if (s.t < 0.9) {
+      const [mx, my] = P(s.sx, s.sy, 8 + s.t * s.t * 500);
+      pix(ctx, mx - 1, my - 6, 3, 8, '#e8e8e8');
+      pix(ctx, mx - 1, my + 2, 3, 3, '#ffb030');
+      if (Math.random() < 0.8) G.effects.push({ k: 'smoke', x: s.sx, y: s.sy, z: 8 + s.t * s.t * 500, t: 0, dur: 1.5, light: true });
+    } else {
+      const f = (s.t - 0.9) / (s.dur - 0.9);
+      const z = 520 * (1 - f) * (1 - f);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.beginPath(); ctx.ellipse(gx, gy, 3 + f * 8, 1.5 + f * 4, 0, 0, 7); ctx.fill();
+      const [mx, my] = P(s.x, s.y, z);
+      pix(ctx, mx - 1, my - 8, 3, 8, '#e8e8e8');
+      pix(ctx, mx - 1, my - 12, 3, 4, '#ffb030');
+    }
+  }
+}
+function drawRank(ctx, e) {
+  const z = e.def.cat === 'inf' ? 15 : (e.def.look.H || 5) + 12;
+  const [sx, sy] = P(e.x, e.y, z);
+  const x = sx + (e.def.cat === 'inf' ? 6 : 10), y = sy - 2;
+  for (let k = 0; k < e.rank; k++) {
+    const yy = y + k * 3;
+    pix(ctx, x, yy + 1, 1, 1, '#ffd040'); pix(ctx, x + 1, yy, 1, 1, '#ffd040'); pix(ctx, x + 2, yy + 1, 1, 1, '#ffd040');
+  }
+}
+
+// ===== 主渲染 =====
+function render() {
+  const ctx = R.ctx, m = G.map, p = me();
+  ctx.fillStyle = '#0a0c0e'; ctx.fillRect(0, 0, R.w, R.h);
+  ctx.drawImage(R.terrain, Math.round(-R.ox - R.camX), Math.round(-R.camY));
+  // 水面閃爍
+  // 可視磚格範圍
+  const corners = [screenToWorld(0, 0), screenToWorld(R.w, 0), screenToWorld(0, R.h), screenToWorld(R.w, R.h)];
+  const x0 = Math.max(0, Math.floor(Math.min(...corners.map(c => c[0]))) - 2), x1 = Math.min(MAP_W - 1, Math.ceil(Math.max(...corners.map(c => c[0]))) + 2);
+  const y0 = Math.max(0, Math.floor(Math.min(...corners.map(c => c[1]))) - 2), y1 = Math.min(MAP_H - 1, Math.ceil(Math.max(...corners.map(c => c[1]))) + 2);
+  const onScreen = (x, y, pad = 60) => { const [sx, sy] = P(x, y, 0); return sx > -pad && sx < R.w + pad && sy > -pad && sy < R.h + pad * 1.5; };
+
+  // 水面動畫
+  const wt = G.time;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = m.idx(x, y);
+    if (m.terrain[i] !== T_WATER) continue;
+    if (((m.variant[i] + Math.floor(wt * 2)) % 7) === 0) {
+      const [sx, sy] = P(x + 0.5, y + 0.5, 0);
+      pix(ctx, sx - 3 + (m.variant[i] % 5), sy - 1, 4, 1, 'rgba(180,220,255,0.5)');
+    }
+  }
+  drawOre(ctx, x0, y0, x1, y1);
+  for (const f of G.effects) if (f.k === 'scorch' || f.k === 'corpse' || f.k === 'wreck') if (onScreen(f.x, f.y)) drawGroundEffect(ctx, f);
+
+  // 建築放置預覽(地面)
+  if (UI.placing && UI.hoverTile) drawPlacement(ctx);
+
+  // 深度排序
+  const list = [];
+  for (const d of R.doodads) if (d.x > x0 - 1 && d.x < x1 + 2 && d.y > y0 - 1 && d.y < y1 + 2 && onScreen(d.x, d.y)) list.push(d);
+  for (const e of G.entities) {
+    if (!e.alive || !onScreen(e.x, e.y, 120)) continue;
+    if (!isVisible(e)) continue;
+    list.push(e);
+  }
+  list.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+  for (const e of list) {
+    if (e.kind === 'doodad') drawDoodad(ctx, e);
+    else if (e.kind === 'bld') drawBuilding(ctx, e);
+    else drawUnit(ctx, e);
+  }
+  for (const pr of G.projs) drawProj(ctx, pr);
+  for (const f of G.effects) if (f.k !== 'scorch' && f.k !== 'corpse' && f.k !== 'wreck' && f.k !== 'shock' && onScreen(f.x !== undefined ? f.x : f.x1, f.y !== undefined ? f.y : f.y1, 200)) drawEffect(ctx, f);
+
+  // 生命條
+  for (const e of list) {
+    if (e.kind === 'doodad') continue;
+    const sel = G.sel.includes(e);
+    if (sel || e === UI.hoverEnt || (e.hp < e.maxHp && G.time - e.hitT < 3)) drawHealth(ctx, e, sel);
+    if (e.kind === 'unit' && e.rank) drawRank(ctx, e);
+  }
+  // 集結點
+  if (p.rally && G.sel.some(e => e.kind === 'bld' && (e.type === 'barracks' || e.type === 'factory'))) {
+    const [rx, ry] = P(p.rally[0], p.rally[1], 0);
+    line(ctx, [rx, ry], [rx, ry - 12], '#ddd', 1); pix(ctx, rx + 1, ry - 12, 6, 4, p.color);
+  }
+
+  // 戰爭迷霧
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = m.idx(x, y);
+    if (p.visible[i]) continue;
+    const [cx, cy] = P(x, y, 0);
+    ctx.fillStyle = p.explored[i] ? 'rgba(0,0,0,0.42)' : '#000';
+    ctx.beginPath(); ctx.moveTo(cx, cy - 1); ctx.lineTo(cx + HW + 1, cy + HH); ctx.lineTo(cx, cy + TH + 1); ctx.lineTo(cx - HW - 1, cy + HH); ctx.closePath(); ctx.fill();
+  }
+
+  for (const s of G.strikes) drawStrike(ctx, s);
+  for (const f of G.effects) if (f.k === 'shock') drawEffect(ctx, f);
+
+  // 框選
+  if (UI.drag && UI.drag.active) {
+    const d = UI.drag;
+    ctx.strokeStyle = '#7fff7f'; ctx.lineWidth = 1;
+    ctx.strokeRect(Math.min(d.x0, d.x1) + 0.5, Math.min(d.y0, d.y1) + 0.5, Math.abs(d.x1 - d.x0), Math.abs(d.y1 - d.y0));
+  }
+}
+
+function drawPlacement(ctx) {
+  const p = me(), type = UI.placing, d = BUILDINGS[type];
+  const [hx, hy] = UI.hoverTile;
+  const tx = hx - Math.floor((d.w - 1) / 2), ty = hy - Math.floor((d.h - 1) / 2);
+  UI.placeAt = [tx, ty];
+  const ok = canPlace(p, type, tx, ty);
+  for (let y = ty; y < ty + d.h; y++) for (let x = tx; x < tx + d.w; x++) {
+    const good = G.map.terrainOk(x, y) && !G.map.bld[G.map.idx(x, y)] && ok;
+    poly(ctx, [P(x, y, 0), P(x + 1, y, 0), P(x + 1, y + 1, 0), P(x, y + 1, 0)], good ? 'rgba(60,255,60,0.35)' : 'rgba(255,40,40,0.45)');
+  }
+  // 建造範圍
+  ctx.globalAlpha = 0.55;
+  const ghost = { type, owner: p.id, tx, ty, w: d.w, h: d.h, x: tx + d.w / 2, y: ty + d.h / 2, prog: 1, hp: 1, maxHp: 1, anim: 0, charge: 0, tdir: Math.PI * 0.75, def: d };
+  drawBuilding(ctx, ghost);
+  ctx.globalAlpha = 1;
+}
+
+// ===== 圖示產生 =====
+function makeIcon(type, owner) {
+  const cv = document.createElement('canvas');
+  cv.width = 64; cv.height = 48;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const g = ctx.createLinearGradient(0, 0, 0, 48);
+  g.addColorStop(0, '#2b3238'); g.addColorStop(1, '#14181c');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 48);
+  // 以 2 倍像素繪製
+  const sm = document.createElement('canvas'); sm.width = 32; sm.height = 24;
+  const sc = sm.getContext('2d');
+  const save = { camX: R.camX, camY: R.camY };
+  const bd = BUILDINGS[type];
+  const savedTime = G.time;
+  if (bd) {
+    const s = Math.max(bd.w, bd.h);
+    const scale = s >= 3 ? 0.55 : s === 2 ? 0.75 : 1.1;
+    sc.save(); sc.scale(scale, scale);
+    const ghost = { type, owner, tx: 0, ty: 0, w: bd.w, h: bd.h, x: bd.w / 2, y: bd.h / 2, prog: 1, hp: 1, maxHp: 1, anim: 0, charge: 0, tdir: Math.PI * 0.75, def: bd };
+    const [cx, cy] = [(ghost.x - ghost.y) * HW, (ghost.x + ghost.y) * HH];
+    R.camX = cx - 16 / scale; R.camY = cy - 16 / scale;
+    const effLen = G.effects.length;
+    drawBuilding(sc, ghost);
+    G.effects.length = effLen;
+    sc.restore();
+  } else {
+    const u = { def: UNITS[type], type, owner, x: 0.5, y: 0.5, dir: Math.PI * 0.75, tdir: Math.PI * 0.75, moving: false, anim: 0, cool: 0, cargo: 0, weapon: UNITS[type].weapon ? WEAPONS[UNITS[type].weapon] : { rof: 1 }, id: 0 };
+    const isInf = UNITS[type].cat === 'inf';
+    const scale = isInf ? 1.6 : 1.1;
+    sc.save(); sc.scale(scale, scale);
+    R.camX = (0.5 - 0.5) * HW - 16 / scale; R.camY = HH - (isInf ? 18 : 15) / scale;
+    drawUnit(sc, u);
+    sc.restore();
+  }
+  R.camX = save.camX; R.camY = save.camY; G.time = savedTime;
+  ctx.drawImage(sm, 0, 0, 64, 48);
+  return cv;
+}
+</script>
+<script>
+'use strict';
+// ===== 介面與輸入 =====
+const UI = {
+  placing: null, placeAt: null, hoverTile: null, hoverEnt: null, drag: null, mode: null,
+  tab: 'bld', mouse: { x: 0, y: 0, in: false }, keys: {}, alertAt: null, icons: {},
+  sig: '', lastClick: { t: 0, id: 0 }, pan: null, shownCredits: 0,
+
+  message(text) {
+    const box = document.getElementById('msg');
+    if (!box) return;
+    const el = document.createElement('div');
+    el.textContent = text;
+    box.appendChild(el);
+    while (box.children.length > 4) box.removeChild(box.firstChild);
+    setTimeout(() => { el.classList.add('fade'); setTimeout(() => el.remove(), 600); }, 3500);
+  }
+};
+
+function $(id) { return document.getElementById(id); }
+
+// ===== 側邊欄 =====
+function initSidebar() {
+  const p = me();
+  UI.icons = {};
+  for (const cat of CATS) for (const t of typesFor(p, cat)) UI.icons[t] = makeIcon(t, p.id);
+  document.querySelectorAll('#tabs button').forEach(b => {
+    b.onclick = () => { UI.tab = b.dataset.tab; UI.sig = ''; sfx('click'); };
+  });
+  $('btn-repair').onclick = () => { UI.mode = UI.mode === 'repair' ? null : 'repair'; UI.placing = null; sfx('click'); };
+  $('btn-sell').onclick = () => { UI.mode = UI.mode === 'sell' ? null : 'sell'; UI.placing = null; sfx('click'); };
+  $('btn-sound').onclick = () => { Audio2.on = !Audio2.on; $('btn-sound').textContent = Audio2.on ? '🔊' : '🔇'; if (!Audio2.on && window.speechSynthesis) speechSynthesis.cancel(); };
+  $('btn-help').onclick = () => toggleHelp();
+  UI.sig = '';
+}
+
+function rebuildGrid() {
+  const p = me(), grid = $('buildgrid');
+  grid.innerHTML = '';
+  const types = typesFor(p, UI.tab);
+  for (const t of types) {
+    const d = getDef(t);
+    const ok = canBuildType(p, t);
+    const el = document.createElement('div');
+    el.className = 'item' + (ok ? '' : ' locked');
+    el.dataset.type = t;
+    el.appendChild(UI.icons[t]);
+    el.insertAdjacentHTML('beforeend', `<div class="prog"></div><div class="nm">${d.name}</div><div class="cnt"></div><div class="rdy">就緒</div>`);
+    const reqTxt = d.req.length ? '需要:' + d.req.map(r => BUILDINGS[r].name).join('、') : '';
+    el.title = `${d.name}  $${d.cost}\n${d.desc || ''}${ok ? '' : '\n' + reqTxt}\n左鍵:建造/排程(Shift ×5) 右鍵:暫停/取消`;
+    el.onmousedown = ev => {
+      ev.preventDefault();
+      if (!canBuildType(p, t)) { eva('條件不足', false); return; }
+      const q = p.queues[d.cat];
+      if (ev.button === 2) { cancelItem(p, t); return; }
+      if (ev.button !== 0) return;
+      if (q.ready === t) { UI.placing = t; UI.mode = null; sfx('click'); return; }
+      if (q.cur && q.cur.type === t && q.paused) { q.paused = false; eva('繼續', false); return; }
+      const n = ev.shiftKey && !isBuildingType(t) ? 5 : 1;
+      for (let i = 0; i < n; i++) queueItem(p, t);
+    };
+    el.oncontextmenu = ev => ev.preventDefault();
+    grid.appendChild(el);
+  }
+}
+
+function updateSidebar() {
+  const p = me();
+  // 依可用狀態決定是否重建
+  const sig = UI.tab + '|' + typesFor(p, UI.tab).map(t => canBuildType(p, t) ? 1 : 0).join('');
+  if (sig !== UI.sig) { UI.sig = sig; rebuildGrid(); }
+  document.querySelectorAll('#tabs button').forEach(b => {
+    const q = p.queues[b.dataset.tab];
+    b.classList.toggle('active', b.dataset.tab === UI.tab);
+    b.classList.toggle('flash', !!q.ready && b.dataset.tab !== UI.tab);
+  });
+  for (const el of $('buildgrid').children) {
+    const t = el.dataset.type, d = getDef(t), q = p.queues[d.cat];
+    let prog = 0, cnt = q.list.filter(x => x === t).length;
+    if (q.cur && q.cur.type === t) { prog = q.cur.spent / d.cost; cnt++; }
+    const ready = q.ready === t;
+    el.classList.toggle('ready', ready);
+    el.classList.toggle('paused', !!(q.cur && q.cur.type === t && q.paused));
+    el.classList.toggle('busy', isBuildingType(t) && !ready && !!(q.cur || q.ready) && !(q.cur && q.cur.type === t));
+    const pr = el.querySelector('.prog');
+    pr.style.background = prog > 0 ? `conic-gradient(rgba(0,0,0,0) ${prog * 360}deg, rgba(0,0,0,0.65) ${prog * 360}deg)` : '';
+    el.querySelector('.cnt').textContent = cnt > 1 ? cnt : '';
+  }
+  // 資金
+  UI.shownCredits += (p.credits - UI.shownCredits) * 0.25;
+  if (Math.abs(p.credits - UI.shownCredits) < 1) UI.shownCredits = p.credits;
+  $('credits').textContent = '$ ' + Math.floor(UI.shownCredits).toLocaleString();
+  // 電力
+  const max = Math.max(200, p.powerProd, p.powerUse) * 1.15;
+  $('power-fill').style.height = (p.powerProd / max * 100) + '%';
+  $('power-fill').className = p.lowPower ? 'low' : (p.powerProd - p.powerUse < 30 ? 'warn' : '');
+  $('power-use').style.bottom = (p.powerUse / max * 100) + '%';
+  $('powerbar').title = `電力 ${Math.round(p.powerUse)} / ${Math.round(p.powerProd)}`;
+  $('power-txt').textContent = `${Math.round(p.powerUse)}/${Math.round(p.powerProd)}`;
+  updateSuperPanel();
+  $('btn-repair').classList.toggle('on', UI.mode === 'repair');
+  $('btn-sell').classList.toggle('on', UI.mode === 'sell');
+  updateInfo();
+}
+
+function updateSuperPanel() {
+  const el = $('super');
+  const b = G.entities.find(e => e.alive && e.owner === G.human && e.def.super && e.prog >= 1);
+  if (!b) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  const f = b.charge / b.def.charge, ready = f >= 1;
+  if (!el.dataset.init) {
+    el.dataset.init = 1;
+    el.innerHTML = '<div class="sname"></div><div class="sbar"><div class="sfill"></div></div>';
+    el.onclick = () => {
+      const sb = G.entities.find(e => e.alive && e.owner === G.human && e.def.super && e.prog >= 1);
+      if (sb && sb.charge >= sb.def.charge) { UI.mode = 'super'; UI.superB = sb; UI.placing = null; sfx('click'); eva('選擇目標', false); }
+    };
+  }
+  el.classList.toggle('ready', ready);
+  el.querySelector('.sname').textContent = b.def.name + (ready ? '  ▶ 點擊發射' : `  ${fmtTime(b.def.charge - b.charge)}`);
+  el.querySelector('.sfill').style.width = (f * 100) + '%';
+}
+
+function updateInfo() {
+  const el = $('info');
+  const s = G.sel.filter(e => e.alive);
+  if (!s.length) { el.innerHTML = `<span class="dim">遊戲時間 ${fmtTime(G.time)}</span>`; return; }
+  if (s.length === 1) {
+    const e = s[0], d = e.def, own = e.owner === G.human;
+    let extra = '';
+    if (e.kind === 'unit' && d.harvester) extra = `<br>載貨:${Math.floor(e.cargo)} / ${HARV_CAP}`;
+    if (e.kind === 'unit' && e.weapon) extra = `<br>武器射程:${e.weapon.range}`;
+    if (e.kind === 'unit' && !d.harvester) extra += `<br>等級:${VET[e.rank].name}`;
+    if (e.kind === 'bld' && d.power) extra = `<br>電力:${d.power > 0 ? '+' : ''}${d.power}`;
+    el.innerHTML = `<b style="color:${G.players[e.owner].color}">${d.name}</b>${own ? '' : '(敵方)'}<br>生命:${Math.ceil(e.hp)} / ${e.maxHp}${extra}`;
+  } else {
+    const counts = {};
+    for (const e of s) counts[e.def.name] = (counts[e.def.name] || 0) + 1;
+    el.innerHTML = `已選取 ${s.length} 個單位<br>` + Object.entries(counts).map(([n, c]) => `${n} ×${c}`).join('<br>');
+  }
+}
+function fmtTime(t) { const m = Math.floor(t / 60), s = Math.floor(t % 60); return `${m}:${s < 10 ? '0' : ''}${s}`; }
+
+// ===== 小地圖 =====
+const MM = { k: 240 / ((MAP_W + MAP_H) * HW), t: 0 };
+function mmPos(x, y) { return [(R.ox + (x - y) * HW) * MM.k, (x + y) * HH * MM.k]; }
+function drawMinimap(dt) {
+  MM.t -= dt;
+  if (MM.t > 0) return;
+  MM.t = 0.25;
+  const cv = $('minimap'), ctx = cv.getContext('2d'), p = me(), m = G.map;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(R.terrain, 0, 0, R.terrain.width * MM.k, R.terrain.height * MM.k);
+  const tw = HW * MM.k * 2, th = HH * MM.k * 2;
+  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+    const i = m.idx(x, y);
+    const [mx, my] = mmPos(x + 0.5, y + 0.5);
+    if (!p.explored[i]) { ctx.fillStyle = '#000'; ctx.fillRect(mx - tw / 2 - 0.5, my - th / 2 - 0.5, tw + 1, th + 1); continue; }
+    if (m.oreType[i] && m.ore[i] > 30) { ctx.fillStyle = m.oreType[i] === 2 ? '#5fd0ff' : '#e0a83a'; ctx.fillRect(mx - 1, my - 0.5, 2, 1); }
+  }
+  for (const e of G.entities) {
+    if (!e.alive || !isVisible(e)) continue;
+    ctx.fillStyle = G.players[e.owner].color;
+    if (e.kind === 'bld') {
+      const pts = [mmPos(e.tx, e.ty), mmPos(e.tx + e.w, e.ty), mmPos(e.tx + e.w, e.ty + e.h), mmPos(e.tx, e.ty + e.h)];
+      ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.fill();
+    } else {
+      const [mx, my] = mmPos(e.x, e.y);
+      ctx.fillRect(mx - 1, my - 1, 2, 2);
+    }
+  }
+  // 視野框
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+  const k = MM.k;
+  ctx.strokeRect((R.camX + R.ox) * k + 0.5, R.camY * k + 0.5, R.w * k, R.h * k);
+  if (UI.alertAt && G.time - UI.alertAt[2] < 4 && Math.sin(G.time * 10) > 0) {
+    const [ax, ay] = mmPos(UI.alertAt[0], UI.alertAt[1]);
+    ctx.strokeStyle = '#ff3030'; ctx.beginPath(); ctx.arc(ax, ay, 6, 0, 7); ctx.stroke();
+  }
+}
+function minimapToWorld(ev) {
+  const r = $('minimap').getBoundingClientRect();
+  const mx = (ev.clientX - r.left) * 240 / r.width, my = (ev.clientY - r.top) * 120 / r.height;
+  const ix = mx / MM.k - R.ox, iy = my / MM.k;
+  return [(ix / HW + iy / HH) / 2, (iy / HH - ix / HW) / 2];
+}
+
+// ===== 選取與滑鼠 =====
+function pickEntity(sx, sy) {
+  let best = null, bd = 1e9;
+  for (const e of G.entities) {
+    if (!e.alive || e.kind !== 'unit' || !isVisible(e)) continue;
+    const inf = e.def.cat === 'inf';
+    const [px, py] = P(e.x, e.y, inf ? 6 : 5);
+    const d = Math.hypot(px - sx, py - sy);
+    if (d < (inf ? 7 : 12) && d < bd) { bd = d; best = e; }
+  }
+  if (best) return best;
+  for (const zz of [0, 6, 12, 18, 24, 30]) {
+    const [wx, wy] = screenToWorld(sx, sy + zz);
+    const tx = Math.floor(wx), ty = Math.floor(wy);
+    if (!G.map.inb(tx, ty)) continue;
+    const id = G.map.bld[G.map.idx(tx, ty)];
+    if (id) { const b = G.byId.get(id); if (b && b.alive && isVisible(b)) return b; }
+  }
+  return null;
+}
+
+function mouseLow(ev) {
+  const r = R.cv.getBoundingClientRect();
+  return [(ev.clientX - r.left) / SCALE, (ev.clientY - r.top) / SCALE];
+}
+function ownSelUnits() { return G.sel.filter(e => e.alive && e.kind === 'unit' && e.owner === G.human); }
+
+function initInput() {
+  const cv = R.cv;
+  cv.addEventListener('contextmenu', ev => ev.preventDefault());
+  cv.addEventListener('mousemove', ev => {
+    const [x, y] = mouseLow(ev);
+    UI.mouse.x = x; UI.mouse.y = y; UI.mouse.in = true;
+    if (UI.pan) { R.camX = UI.pan.cx - (x - UI.pan.x); R.camY = UI.pan.cy - (y - UI.pan.y); clampCamera(); return; }
+    if (UI.drag) {
+      UI.drag.x1 = x; UI.drag.y1 = y;
+      if (Math.abs(x - UI.drag.x0) + Math.abs(y - UI.drag.y0) > 4) UI.drag.active = true;
+    }
+  });
+  cv.addEventListener('mouseleave', () => { UI.mouse.in = false; });
+  cv.addEventListener('mousedown', ev => {
+    audioInit();
+    if (!G.map || G.over) return;
+    const [x, y] = mouseLow(ev);
+    if (ev.button === 1) { ev.preventDefault(); UI.pan = { x, y, cx: R.camX, cy: R.camY }; return; }
+    if (ev.button === 2) { rightClick(x, y, ev); return; }
+    if (ev.button !== 0) return;
+    if (UI.placing) { tryPlace(); return; }
+    if (UI.mode === 'super') {
+      const [wx, wy] = screenToWorld(x, y);
+      if (UI.superB && G.map.inb(Math.floor(wx), Math.floor(wy))) fireSuper(UI.superB, wx, wy);
+      UI.mode = null; UI.superB = null;
+      return;
+    }
+    if (UI.mode) {
+      const e = pickEntity(x, y);
+      if (e && e.kind === 'bld' && e.owner === G.human) {
+        if (UI.mode === 'sell') sellBuilding(e);
+        else { e.repairing = !e.repairing; sfx('click'); if (e.repairing) eva('修理中', false); }
+      }
+      if (!ev.shiftKey) UI.mode = null;
+      return;
+    }
+    UI.drag = { x0: x, y0: y, x1: x, y1: y, active: false, shift: ev.shiftKey };
+  });
+  window.addEventListener('mouseup', ev => {
+    if (ev.button === 1) { UI.pan = null; return; }
+    if (ev.button !== 0 || !UI.drag) return;
+    const d = UI.drag; UI.drag = null;
+    if (!G.map) return;
+    if (d.active) boxSelect(d);
+    else clickSelect(d.x0, d.y0, d.shift);
+  });
+  // 小地圖
+  const mm = $('minimap');
+  let mmDown = false;
+  mm.addEventListener('contextmenu', ev => ev.preventDefault());
+  mm.addEventListener('mousedown', ev => {
+    if (!G.map) return;
+    const [wx, wy] = minimapToWorld(ev);
+    if (ev.button === 2) { const us = ownSelUnits(); if (us.length) { cmdMove(us, wx, wy, ev.ctrlKey); sfx('ack'); } return; }
+    mmDown = true; centerCamera(wx, wy);
+  });
+  window.addEventListener('mousemove', ev => { if (mmDown) { const [wx, wy] = minimapToWorld(ev); centerCamera(wx, wy); } });
+  window.addEventListener('mouseup', () => { mmDown = false; });
+
+  window.addEventListener('keydown', ev => {
+    if (!G.map) return;
+    UI.keys[ev.key] = true;
+    const k = ev.key;
+    if (k === 'Escape') { UI.placing = null; UI.mode = null; G.sel = []; $('help').classList.add('hidden'); }
+    else if (k === 's' || k === 'S') cmdStop(ownSelUnits());
+    else if (k === 'h' || k === 'H') { const c = G.entities.find(e => e.alive && e.owner === G.human && e.type === 'conyard') || G.entities.find(e => e.alive && e.owner === G.human); if (c) centerCamera(c.x, c.y); }
+    else if (k === ' ') { if (UI.alertAt) centerCamera(UI.alertAt[0], UI.alertAt[1]); ev.preventDefault(); }
+    else if ((k === 'a' || k === 'A') && ev.ctrlKey) { ev.preventDefault(); G.sel = G.entities.filter(e => e.alive && e.owner === G.human && e.kind === 'unit' && e.weapon); }
+    else if (k === 'q' || k === 'Q') { G.sel = G.entities.filter(e => e.alive && e.owner === G.human && e.kind === 'unit' && e.weapon && onScreenEnt(e)); }
+    else if (k === 'p' || k === 'P') togglePause();
+    else if (k === 'F1') { ev.preventDefault(); toggleHelp(); }
+    else if (/^[1-9]$/.test(k)) {
+      if (ev.ctrlKey) { ev.preventDefault(); G.groups[k] = ownSelUnits().slice(); eva(`編組 ${k}`, false); }
+      else if (G.groups[k]) {
+        const g = G.groups[k].filter(e => e.alive);
+        const now = performance.now();
+        if (UI.lastGroup === k && now - UI.lastGroupT < 400 && g.length) centerCamera(g[0].x, g[0].y);
+        UI.lastGroup = k; UI.lastGroupT = now;
+        G.sel = g;
+      }
+    }
+    else if (k === 'Tab') { ev.preventDefault(); UI.tab = CATS[(CATS.indexOf(UI.tab) + 1) % CATS.length]; }
+  });
+  window.addEventListener('keyup', ev => { UI.keys[ev.key] = false; });
+}
+
+function onScreenEnt(e) { const [sx, sy] = P(e.x, e.y, 0); return sx >= 0 && sy >= 0 && sx <= R.w && sy <= R.h; }
+
+function clickSelect(x, y, shift) {
+  const e = pickEntity(x, y);
+  if (!e) { if (!shift) G.sel = []; return; }
+  const now = performance.now();
+  if (e.kind === 'unit' && e.owner === G.human && UI.lastClick.id === e.id && now - UI.lastClick.t < 350) {
+    G.sel = G.entities.filter(o => o.alive && o.owner === G.human && o.type === e.type && onScreenEnt(o));
+  } else if (shift && e.owner === G.human && e.kind === 'unit') {
+    const i = G.sel.indexOf(e);
+    if (i >= 0) G.sel.splice(i, 1); else G.sel = G.sel.filter(o => o.kind === 'unit' && o.owner === G.human).concat([e]);
+  } else G.sel = [e];
+  UI.lastClick = { t: now, id: e.id };
+  if (e.owner === G.human) sfx('click');
+}
+
+function boxSelect(d) {
+  const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1);
+  const found = G.entities.filter(e => {
+    if (!e.alive || e.kind !== 'unit' || e.owner !== G.human) return false;
+    const [sx, sy] = P(e.x, e.y, 5);
+    return sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1;
+  });
+  // 有戰鬥單位時排除採集車
+  const combat = found.filter(e => e.weapon);
+  const pick = combat.length ? combat : found;
+  G.sel = d.shift ? Array.from(new Set(G.sel.concat(pick))) : pick;
+  if (pick.length) sfx('ack');
+}
+
+function rightClick(x, y, ev) {
+  if (UI.placing || UI.mode) { UI.placing = null; UI.mode = null; return; }
+  const us = ownSelUnits();
+  const [wx, wy] = screenToWorld(x, y);
+  if (!us.length) {
+    // 選取兵營/工廠時設集結點
+    if (G.sel.some(e => e.kind === 'bld' && e.owner === G.human && (e.type === 'barracks' || e.type === 'factory'))) {
+      me().rally = [wx, wy]; eva('集結點已設定', false); sfx('ack');
+    } else G.sel = [];
+    return;
+  }
+  const t = pickEntity(x, y);
+  const engs = us.filter(u => u.def.engineer);
+  if (engs.length && t && t.kind === 'bld' && (t.owner !== G.human || t.hp < t.maxHp)) {
+    cmdCapture(engs, t);
+    const rest = us.filter(u => !u.def.engineer);
+    if (t.owner !== G.human) cmdAttack(rest, t);
+    G.effects.push({ k: 'marker', x: t.x, y: t.y, c: '#ffd040', t: 0, dur: 0.5 });
+    sfx('ack');
+    return;
+  }
+  if (t && t.owner !== G.human) {
+    cmdAttack(us, t);
+    G.effects.push({ k: 'marker', x: t.x, y: t.y, c: '#ff4040', t: 0, dur: 0.5 });
+    sfx('ack');
+    return;
+  }
+  // 採集車點礦
+  const m = G.map, tx = Math.floor(wx), ty = Math.floor(wy);
+  const harv = us.filter(u => u.def.harvester), others = us.filter(u => !u.def.harvester);
+  if (harv.length && m.inb(tx, ty) && m.ore[m.idx(tx, ty)] > 10) {
+    for (const h of harv) { h.order = { t: 'harvest' }; h.htile = [tx, ty]; h.hstate = 'toOre'; h.pathTo(tx + 0.5, ty + 0.5); }
+  } else if (harv.length && t && t.kind === 'bld' && t.type === 'refinery') {
+    for (const h of harv) { h.order = { t: 'harvest' }; h.hstate = 'toRef'; h.ref = null; }
+  } else if (harv.length) cmdMove(harv, wx, wy, false);
+  if (others.length) cmdMove(others, wx, wy, ev.ctrlKey);
+  G.effects.push({ k: 'marker', x: wx, y: wy, c: ev.ctrlKey ? '#ff8040' : '#40ff40', t: 0, dur: 0.5 });
+  sfx('ack');
+}
+
+function tryPlace() {
+  const p = me(), type = UI.placing;
+  if (!UI.placeAt) return;
+  const [tx, ty] = UI.placeAt;
+  if (!canPlace(p, type, tx, ty)) { eva('無法在此建造', false); sfx('die'); return; }
+  placeBuilding(p, type, tx, ty);
+  p.queues[BUILDINGS[type].cat].ready = null;
+  UI.placing = null;
+  sfx('place');
+}
+
+function updateHover() {
+  if (!UI.mouse.in) { UI.hoverEnt = null; return; }
+  const [wx, wy] = screenToWorld(UI.mouse.x, UI.mouse.y);
+  UI.hoverTile = [Math.floor(wx), Math.floor(wy)];
+  UI.hoverEnt = pickEntity(UI.mouse.x, UI.mouse.y);
+  let cur = 'default';
+  if (UI.placing) cur = 'cell';
+  else if (UI.mode === 'super') cur = 'crosshair';
+  else if (UI.mode === 'sell') cur = 'copy';
+  else if (UI.mode === 'repair') cur = 'help';
+  else if (UI.hoverEnt && UI.hoverEnt.owner !== G.human && ownSelUnits().some(u => u.weapon)) cur = 'crosshair';
+  else if (UI.hoverEnt && UI.hoverEnt.owner === G.human) cur = 'pointer';
+  else if (ownSelUnits().length) cur = 'move';
+  R.cv.style.cursor = cur;
+}
+
+function updateCamera(dt) {
+  const sp = 700 * dt;
+  let dx = 0, dy = 0;
+  if (UI.keys.ArrowLeft) dx -= sp; if (UI.keys.ArrowRight) dx += sp;
+  if (UI.keys.ArrowUp) dy -= sp; if (UI.keys.ArrowDown) dy += sp;
+  if (UI.mouse.in && !UI.pan && !UI.drag) {
+    const e = 6;
+    if (UI.mouse.x < e) dx -= sp; if (UI.mouse.x > R.w - e) dx += sp;
+    if (UI.mouse.y < e) dy -= sp; if (UI.mouse.y > R.h - e) dy += sp;
+  }
+  if (dx || dy) { R.camX += dx; R.camY += dy; clampCamera(); }
+}
+
+// ===== 選單 / 結束 / 說明 =====
+function togglePause() {
+  G.paused = !G.paused;
+  $('pause').classList.toggle('hidden', !G.paused);
+}
+function toggleHelp() { $('help').classList.toggle('hidden'); }
+
+function endGame(win) {
+  G.over = true;
+  eva(win ? '任務完成' : '任務失敗');
+  const el = $('end');
+  el.querySelector('h1').textContent = win ? '勝利' : '戰敗';
+  el.querySelector('h1').className = win ? 'win' : 'lose';
+  el.querySelector('p').textContent = win ? `敵軍基地已被摧毀。作戰時間 ${fmtTime(G.time)}。` : `我方基地已全數淪陷。作戰時間 ${fmtTime(G.time)}。`;
+  setTimeout(() => el.classList.remove('hidden'), 1500);
+}
+</script>
+<script>
+'use strict';
+// ===== 主迴圈與啟動 =====
+const SIDEBAR_W = 268;
+let lowCv = null, viewCtx = null;
+
+function resize() {
+  const cv = $('view');
+  const w = Math.max(160, window.innerWidth - SIDEBAR_W), h = window.innerHeight;
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  cv.width = w; cv.height = h;
+  R.w = Math.ceil(w / SCALE); R.h = Math.ceil(h / SCALE);
+  lowCv.width = R.w; lowCv.height = R.h;
+  R.ctx = lowCv.getContext('2d');
+  R.ctx.imageSmoothingEnabled = false;
+  viewCtx = cv.getContext('2d');
+  viewCtx.imageSmoothingEnabled = false;
+  if (G.map) clampCamera();
+}
+
+let lastT = performance.now();
+function frame(now) {
+  const rdt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+  if (G.map) {
+    updateCamera(rdt);
+    if (!G.paused) {
+      // 子步進,讓高速也穩定
+      const dt = rdt * G.speed, n = Math.ceil(dt / 0.034);
+      for (let i = 0; i < n; i++) updateGame(dt / n);
+    }
+    updateHover();
+    render();
+    viewCtx.drawImage(lowCv, 0, 0, R.w * SCALE, R.h * SCALE);
+    updateSidebar();
+    drawMinimap(rdt);
+  }
+  requestAnimationFrame(frame);
+}
+
+function startGame() {
+  audioInit();
+  const faction = document.querySelector('.faction.sel').dataset.f;
+  const difficulty = $('difficulty').value;
+  newGame({ faction, difficulty });
+  buildTerrain();
+  initSidebar();
+  MM.t = 0;
+  UI.mouse.in = false;
+  $('menu').classList.add('hidden');
+  $('end').classList.add('hidden');
+  $('game').classList.remove('hidden');
+  const s = G.map.starts[me().startIdx];
+  centerCamera(s.x + 1.5, s.y + 1.5);
+  eva('戰場控制,已上線');
+}
+
+window.addEventListener('load', () => {
+  lowCv = document.createElement('canvas');
+  R.cv = $('view');
+  resize();
+  window.addEventListener('resize', resize);
+  initInput();
+  document.querySelectorAll('.faction').forEach(el => {
+    el.onclick = () => { document.querySelectorAll('.faction').forEach(o => o.classList.remove('sel')); el.classList.add('sel'); };
+  });
+  $('start').onclick = startGame;
+  $('again').onclick = () => { $('end').classList.add('hidden'); $('menu').classList.remove('hidden'); };
+  $('speed').onchange = e => { G.speed = parseFloat(e.target.value); };
+  $('pause').onclick = togglePause;
+  $('help').onclick = toggleHelp;
+  if (window.speechSynthesis) speechSynthesis.getVoices();
+  requestAnimationFrame(frame);
+});
+</script>
+</body>
+</html>
