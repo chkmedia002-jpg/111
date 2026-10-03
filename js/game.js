@@ -286,9 +286,13 @@ function kill(e) {
     if (e.def.cat === 'inf') {
       G.effects.push({ k: 'corpse', x: e.x, y: e.y, c: G.players[e.owner].color, t: 0, dur: 6 });
       sfx('die', e.x, e.y);
+    } else if (e.def.look.kind === 'horse') {
+      G.effects.push({ k: 'hcorpse', x: e.x, y: e.y, dir: e.dir, c: G.players[e.owner].color, t: 0, dur: 8 });
+      sfx('die', e.x, e.y);
     } else {
-      addExplosion(e.x, e.y, 0.9, 0);
-      G.effects.push({ k: 'wreck', x: e.x, y: e.y, dir: e.dir, L: e.def.look.L, W: e.def.look.W, t: 0, dur: 12 });
+      const wood = FACTIONS[G.players[e.owner].faction].era === 'ming';
+      addExplosion(e.x, e.y, wood ? 0.6 : 0.9, 0);
+      G.effects.push({ k: 'wreck', x: e.x, y: e.y, dir: e.dir, L: e.def.look.L, W: e.def.look.W, t: 0, dur: 12, wood });
       sfx('boom', e.x, e.y);
     }
   }
@@ -318,6 +322,20 @@ function fire(src, t, w) {
   tx += (Math.random() - 0.5) * 0.2; ty += (Math.random() - 0.5) * 0.2;
   sfx(w.snd, src.x, src.y);
   const dmg = w.dmg * vetOf(src).dmg;
+  if (w.smoke) for (let i = 0; i < 3; i++) G.effects.push({ k: 'smoke', x: mx + (Math.random() - 0.5) * 0.15, y: my + (Math.random() - 0.5) * 0.15, z: mz, t: 0, dur: 1.2 + Math.random() * 0.6, light: true });
+  if (w.kind === 'melee') {
+    damage(t, dmg, w.wh, src);
+    G.effects.push({ k: 'slash', x: tx, y: ty, z: az, t: 0, dur: 0.25, a: Math.random() * 6 });
+    return;
+  }
+  if (w.kind === 'volley') {
+    for (let i = 0; i < w.n; i++) {
+      const ex = tx + (Math.random() - 0.5) * 1.4, ey = ty + (Math.random() - 0.5) * 1.4;
+      const d = Math.hypot(ex - mx, ey - my);
+      G.projs.push({ k: 'missile', x0: mx, y0: my, z0: mz, x1: ex, y1: ey, z1: 0, t: -i * 0.07, dur: Math.max(0.1, d / w.speed), target: null, w, dmg, owner: src.owner, src, arc: w.arc, small: true });
+    }
+    return;
+  }
   if (w.kind === 'laser' || w.kind === 'rail') {
     damage(t, dmg, w.wh, src);
     if (w.splash) damageArea(tx, ty, w.splash, dmg * 0.5, w.wh, src.owner, t, src);
@@ -330,7 +348,7 @@ function fire(src, t, w) {
     const speed = w.kind === 'bullet' ? 24 : w.speed;
     const d = Math.hypot(tx - mx, ty - my);
     G.projs.push({ k: w.kind, x0: mx, y0: my, z0: mz, x1: tx, y1: ty, z1: az, t: 0, dur: Math.max(0.05, d / speed),
-      target: t, w, dmg, owner: src.owner, src, c: w.color || '#ffd27a' });
+      target: t, w, dmg, owner: src.owner, src, c: w.color || '#ffd27a', arc: w.arc ?? (w.kind === 'missile' ? 18 : w.kind === 'shell' ? 4 : 0) });
     G.effects.push({ k: 'flash', x: mx, y: my, z: mz, t: 0, dur: 0.08 });
   }
 }
@@ -338,16 +356,20 @@ function fire(src, t, w) {
 function updateProjs(dt) {
   for (const p of G.projs) {
     p.t += dt;
-    if (p.k === 'missile' && Math.random() < 0.6) {
+    if (p.t > 0 && (p.k === 'missile' || p.w.firepot) && Math.random() < (p.small ? 0.3 : 0.6)) {
       const f = p.t / p.dur;
-      G.effects.push({ k: 'smoke', x: p.x0 + (p.x1 - p.x0) * f, y: p.y0 + (p.y1 - p.y0) * f, z: p.z0 + (p.z1 - p.z0) * f + Math.sin(f * Math.PI) * 18, t: 0, dur: 0.6 });
+      G.effects.push({ k: 'smoke', x: p.x0 + (p.x1 - p.x0) * f, y: p.y0 + (p.y1 - p.y0) * f, z: p.z0 + (p.z1 - p.z0) * f + Math.sin(f * Math.PI) * p.arc, t: 0, dur: 0.6 });
     }
     if (p.t >= p.dur) {
       p.done = true;
-      if (p.target.alive) damage(p.target, p.dmg, p.w.wh, p.src);
+      if (p.target && p.target.alive) damage(p.target, p.dmg, p.w.wh, p.src);
       if (p.w.splash) damageArea(p.x1, p.y1, p.w.splash, p.dmg * 0.5, p.w.wh, p.owner, p.target, p.src);
       if (p.k === 'bullet') G.effects.push({ k: 'spark', x: p.x1, y: p.y1, z: p.z1, c: '#ffe9a0', t: 0, dur: 0.12 });
-      else { addExplosion(p.x1, p.y1, p.k === 'shell' ? 0.55 : 0.45, 0); sfx('hit', p.x1, p.y1); }
+      else if (p.k === 'arrow') G.effects.push({ k: 'part', x: p.x1, y: p.y1, z: 1, vx: 0, vy: 0, vz: 8, c: '#555', t: 0, dur: 0.25 });
+      else {
+        addExplosion(p.x1, p.y1, p.small ? 0.3 : p.k === 'shell' ? 0.55 : 0.45, 0); sfx('hit', p.x1, p.y1);
+        if (p.w.firepot) for (let i = 0; i < 6; i++) G.effects.push({ k: 'fire', x: p.x1 + (Math.random() - 0.5) * 1.2, y: p.y1 + (Math.random() - 0.5) * 1.2, z: 0, t: -Math.random() * 1.5, dur: 0.8 });
+      }
     }
   }
   G.projs = G.projs.filter(p => !p.done);
@@ -685,13 +707,13 @@ function fireSuper(b, x, y) {
   if (!b.alive || b.charge < b.def.charge) return false;
   b.charge = 0;
   const kind = b.def.super, owner = b.owner;
-  if (owner === G.human) eva(kind === 'orbital' ? '軌道雷射啟動' : '導彈已發射');
-  else eva(kind === 'orbital' ? '警告:敵方軌道雷射已啟動' : '警告:偵測到敵方導彈發射');
+  if (owner === G.human) eva(`${b.def.name}已發動`);
+  else eva(`警告:敵方${b.def.name}已發動`);
   if (kind === 'orbital') {
-    G.strikes.push({ k: 'orbital', x, y, cx: x, cy: y, owner, t: 0, dur: 4.5, tick: 0 });
+    G.strikes.push({ k: 'orbital', vis: b.def.vis, x, y, cx: x, cy: y, owner, t: 0, dur: 4.5, tick: 0 });
     sfx('laserB', x, y);
   } else {
-    G.strikes.push({ k: 'missile', x, y, owner, t: 0, dur: 3, sx: b.x, sy: b.y });
+    G.strikes.push({ k: 'missile', vis: b.def.vis, x, y, owner, t: 0, dur: 3, sx: b.x, sy: b.y });
     sfx('rocket', b.x, b.y);
   }
   if (owner !== G.human) UI.alertAt = [x, y, G.time];
@@ -857,15 +879,20 @@ function checkEnd() {
 // ===== 新遊戲 =====
 function newGame(opts) {
   const seed = opts.seed || (Math.random() * 1e9) | 0;
-  G.map = new GameMap(seed);
+  G.era = ERAS[opts.era] ? opts.era : '2050';
+  const era = ERAS[G.era];
+  G.map = new GameMap(seed, era.players);
   G.entities = []; G.byId = new Map(); G.nextId = 1; G.effects = []; G.projs = []; G.strikes = []; G.reveals = [];
   G.time = 0; G.over = false; G.sel = []; G.groups = {}; G.difficulty = opts.difficulty;
-  const other = opts.faction === 'ac' ? 'ep' : 'ac';
-  const swap = (seed & 1) === 1;
-  const human = makePlayer(0, opts.faction, false, swap ? 1 : 0);
-  const ai = makePlayer(1, other, true, swap ? 0 : 1);
-  G.players = [human, ai]; G.human = 0;
-  ai.ai = new AI(ai, opts.difficulty);
+  const fac = era.factions.includes(opts.faction) ? opts.faction : era.factions[0];
+  const facs = [fac].concat(era.factions.filter(f => f !== fac));
+  // 隨機分配起始位置
+  const idx = facs.map((_, i) => i), rr = mulberry32(seed ^ 0x5bd1);
+  for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(rr() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+  G.players = facs.map((f, i) => makePlayer(i, f, i > 0, idx[i]));
+  G.human = 0;
+  const human = G.players[0];
+  for (const p of G.players) if (p.isAI) p.ai = new AI(p, opts.difficulty);
   for (const p of G.players) {
     const s = G.map.starts[p.startIdx];
     placeBuilding(p, 'conyard', s.x, s.y, true);

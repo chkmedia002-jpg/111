@@ -499,6 +499,13 @@ function drawEffect(ctx, f) {
       ctx.globalAlpha = 1;
       break;
     }
+    case 'slash': {
+      const [x, y] = P(f.x, f.y, f.z);
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.8 * (1 - k) + 0.2; pushA(ctx, 1 - k);
+      ctx.beginPath(); ctx.arc(x, y, 3 + k * 2, f.a, f.a + 2.2); ctx.stroke();
+      popA(ctx);
+      break;
+    }
     case 'marker': {
       const [x, y] = P(f.x, f.y, 0);
       const r = 10 * (1 - k) + 2;
@@ -526,10 +533,19 @@ function drawGroundEffect(ctx, f) {
     circ(ctx, x + 2.4, y - 0.8, 0.8, '#b08060');
     ell(ctx, x + 1, y + 0.6, 1.8, 0.6, 'rgba(110,10,10,0.5)');
     ctx.globalAlpha = 1;
+  } else if (f.k === 'hcorpse') {
+    const [x, y] = P(f.x, f.y, 0);
+    pushA(ctx, Math.min(1, (1 - k) * 2));
+    ell(ctx, x + 0.5, y + 0.3, 7, 2.5, 'rgba(0,0,0,0.3)');
+    ell(ctx, x, y - 1.2, 5.5, 2, '#4a3424'); ell(ctx, x + 4, y - 1.6, 1.8, 1, '#4a3424');
+    line(ctx, [x - 3, y - 1], [x - 5, y + 0.5], '#3a2a1e', 0.8); line(ctx, [x + 1, y - 0.5], [x + 3, y + 1], '#3a2a1e', 0.8);
+    ell(ctx, x - 1, y - 2.2, 2, 0.8, f.c);
+    ell(ctx, x - 2.5, y + 1, 2.4, 0.8, 'rgba(110,10,10,0.45)');
+    popA(ctx);
   } else if (f.k === 'wreck') {
     ctx.globalAlpha = Math.min(1, (1 - k) * 2);
     const Q = lframe(f.x, f.y, f.dir), r = rect(-f.L / 2, -f.W / 2, f.L / 2, f.W / 2);
-    prism(ctx, Q, r, rect(-f.L * 0.42, -f.W * 0.4, f.L * 0.4, f.W * 0.4), 0, 3.5, '#2c2824', '#38332d');
+    prism(ctx, Q, r, rect(-f.L * 0.42, -f.W * 0.4, f.L * 0.4, f.W * 0.4), 0, 3.5, f.wood ? '#3a2a1c' : '#2c2824', f.wood ? '#4a3624' : '#38332d');
     prism(ctx, Q, rect(-0.15, -0.14, 0.12, 0.14), rect(-0.12, -0.11, 0.1, 0.11), 3.5, 5, '#24201c', '#2e2924');
     line(ctx, Q(0.05, 0, 4.2), Q(0.3, 0.12, 2), '#1a1816', 1);
     if (k < 0.3 && Math.random() < 0.3) G.effects.push({ k: 'fire', x: f.x + (Math.random() - 0.5) * 0.3, y: f.y + (Math.random() - 0.5) * 0.3, z: 4, t: 0, dur: 0.5 });
@@ -538,8 +554,25 @@ function drawGroundEffect(ctx, f) {
   }
 }
 function drawProj(ctx, p) {
+  if (p.t < 0) return;
   const k = p.t / p.dur;
-  const arc = p.k === 'missile' ? Math.sin(k * Math.PI) * 18 : p.k === 'shell' ? Math.sin(k * Math.PI) * 4 : 0;
+  const arcH = p.arc ?? (p.k === 'missile' ? 18 : p.k === 'shell' ? 4 : 0);
+  const arc = Math.sin(k * Math.PI) * arcH;
+  if (p.k === 'arrow' || (p.k === 'shell' && (p.w.ball || p.w.firepot))) {
+    const x = p.x0 + (p.x1 - p.x0) * k, y = p.y0 + (p.y1 - p.y0) * k, z = p.z0 + (p.z1 - p.z0) * k + arc;
+    const [sx, sy] = P(x, y, z);
+    if (p.k === 'arrow') {
+      const k2 = Math.max(0, k - 0.06), arc2 = Math.sin(k2 * Math.PI) * arcH;
+      const [bx, by] = P(p.x0 + (p.x1 - p.x0) * k2, p.y0 + (p.y1 - p.y0) * k2, p.z0 + (p.z1 - p.z0) * k2 + arc2);
+      const dx = sx - bx, dy = sy - by, l = Math.hypot(dx, dy) || 1;
+      line(ctx, [sx - dx / l * 3.5, sy - dy / l * 3.5], [sx, sy], '#5a4630', 0.4);
+      line(ctx, [sx - dx / l * 3.5, sy - dy / l * 3.5], [sx - dx / l * 2.8, sy - dy / l * 2.8], '#e8e2d2', 0.7);
+      circ(ctx, sx, sy, 0.3, '#888');
+    } else if (p.w.firepot) {
+      glow(ctx, sx, sy, 4, '#ff7020', 0.9); circ(ctx, sx, sy, 1.1, '#3a2a1a');
+    } else { circ(ctx, sx, sy, 1, '#1a1a1a'); circ(ctx, sx - 0.3, sy - 0.3, 0.3, '#777'); }
+    return;
+  }
   const x = p.x0 + (p.x1 - p.x0) * k, y = p.y0 + (p.y1 - p.y0) * k, z = p.z0 + (p.z1 - p.z0) * k + arc;
   const [sx, sy] = P(x, y, z);
   if (p.k === 'bullet') {
@@ -553,15 +586,16 @@ function drawProj(ctx, p) {
     glow(ctx, sx, sy, 3, '#ffd060', 0.8); circ(ctx, sx, sy, 0.8, '#fff8d0');
   } else {
     const k2 = Math.max(0, k - 0.03);
-    const arc2 = Math.sin(k2 * Math.PI) * 18;
+    const arc2 = Math.sin(k2 * Math.PI) * arcH;
     const [bx, by] = P(p.x0 + (p.x1 - p.x0) * k2, p.y0 + (p.y1 - p.y0) * k2, p.z0 + (p.z1 - p.z0) * k2 + arc2);
-    line(ctx, [bx, by], [sx, sy], '#d8d8d0', 1.1);
-    glow(ctx, bx, by, 3, '#ff9030', 0.9); circ(ctx, bx, by, 0.6, '#ffffc0');
+    line(ctx, [bx, by], [sx, sy], p.small ? '#8a6a40' : '#d8d8d0', p.small ? 0.5 : 1.1);
+    glow(ctx, bx, by, p.small ? 2 : 3, '#ff9030', 0.9); circ(ctx, bx, by, p.small ? 0.4 : 0.6, '#ffffc0');
   }
 }
 
 // ===== 超級武器 =====
 function drawStrike(ctx, s) {
+  if (s.vis === 'firestorm' || s.vis === 'arrowrain') { drawAncientStrike(ctx, s); return; }
   if (s.k === 'orbital') {
     const [gx, gy] = P(s.cx, s.cy, 0);
     if (s.t < 1) {
@@ -591,7 +625,16 @@ function drawStrike(ctx, s) {
       ctx.beginPath(); ctx.ellipse(gx, gy, 3.2 * HW * 1.4, 3.2 * HH * 1.4, 0, 0, 6.2832); ctx.stroke();
       line(ctx, [gx - 10, gy], [gx + 10, gy], '#ff3030', 0.8); line(ctx, [gx, gy - 5], [gx, gy + 5], '#ff3030', 0.8);
     }
+    const dragon = s.vis === 'firedragon';
     const missile = (mx, my, up) => {
+      if (dragon) {
+        ctx.lineCap = 'round'; line(ctx, [mx, my - 6], [mx, my + 3], '#c02a1a', 3); line(ctx, [mx - 0.6, my - 6], [mx - 0.6, my + 3], '#e8b030', 0.6); ctx.lineCap = 'butt';
+        const hy = my + (up ? -7 : 4);
+        poly(ctx, [[mx - 1.6, hy], [mx + 1.6, hy], [mx, hy + (up ? -3 : 3)]], '#e8b030');
+        circ(ctx, mx + 0.6, hy, 0.35, '#111');
+        glow(ctx, mx, my + (up ? 4 : -7), 6, '#ff7020', 1);
+        return;
+      }
       const d = up ? -1 : 1;
       ctx.fillStyle = '#e8e8e4'; ctx.fillRect(mx - 1.2, my - 6, 2.4, 9);
       ctx.fillStyle = '#b8b8b0'; ctx.fillRect(mx + 0.4, my - 6, 0.8, 9);
@@ -609,6 +652,43 @@ function drawStrike(ctx, s) {
       softShadow(ctx, s.x, s.y, 3 + f * 10, 1.5 + f * 5, 0.5);
       const [mx, my] = P(s.x, s.y, z);
       missile(mx, my, false);
+    }
+  }
+}
+
+function drawAncientStrike(ctx, s) {
+  const [gx, gy] = P(s.cx, s.cy, 0);
+  if (s.t < 1) {
+    pushA(ctx, 0.5 + 0.5 * Math.sin(s.t * 30));
+    ctx.strokeStyle = '#ff6020'; ctx.lineWidth = 0.8;
+    const rr = 50 * (1 - s.t) + 10;
+    ctx.beginPath(); ctx.ellipse(gx, gy, rr, rr / 2, 0, 0, 6.2832); ctx.stroke();
+    popA(ctx);
+    return;
+  }
+  const fade = Math.min(1, (s.dur - s.t) / 0.5);
+  if (s.vis === 'firestorm') {
+    glow(ctx, gx, gy - 6, 50, '#ff5010', 0.55 * fade);
+    for (let k = 0; k < 26; k++) {
+      const a = hash(k * 31 + 7) * 6.283, r = Math.sqrt(hash(k * 17 + 3)) * 2.6;
+      const [fx, fy] = P(s.cx + Math.cos(a) * r, s.cy + Math.sin(a) * r, 0);
+      const h = (6 + hash(k) * 10) * (0.7 + 0.3 * Math.sin(G.time * 12 + k)) * fade;
+      ctx.fillStyle = vgrad(ctx, fy, fy - h, '#ffe060', 'rgba(255,40,0,0)');
+      ctx.beginPath(); ctx.moveTo(fx - 2, fy); ctx.quadraticCurveTo(fx + Math.sin(G.time * 8 + k), fy - h * 1.6, fx + 2, fy); ctx.fill();
+    }
+    if (Math.random() < 0.5) G.effects.push({ k: 'smoke', x: s.cx + (Math.random() - 0.5) * 4, y: s.cy + (Math.random() - 0.5) * 4, z: 12, t: 0, dur: 2 });
+  } else {
+    // 神機箭雨
+    for (let k = 0; k < 60; k++) {
+      const ox = (hash(k * 13 + 1) - 0.5) * 5.5, oy = (hash(k * 7 + 5) - 0.5) * 5.5;
+      const ph = (G.time * 1.6 + hash(k * 3)) % 1;
+      const z = (1 - ph) * 160;
+      const [ax, ay] = P(s.cx + ox - 0.6 * (1 - ph), s.cy + oy - 0.6 * (1 - ph), z);
+      const [bx, by] = P(s.cx + ox - 0.6 * (1 - ph) - 0.15, s.cy + oy - 0.6 * (1 - ph) - 0.15, z + 8);
+      pushA(ctx, fade);
+      line(ctx, [bx, by], [ax, ay], '#6a4a2c', 0.5);
+      glow(ctx, bx, by, 2.2, '#ff8020', 0.9);
+      popA(ctx);
     }
   }
 }
@@ -638,7 +718,7 @@ function render() {
     }
   }
   drawOre(ctx, x0, y0, x1, y1);
-  for (const f of G.effects) if (f.k === 'scorch' || f.k === 'corpse' || f.k === 'wreck') if (onScreen(f.x, f.y)) drawGroundEffect(ctx, f);
+  for (const f of G.effects) if (f.k === 'scorch' || f.k === 'corpse' || f.k === 'wreck' || f.k === 'hcorpse') if (onScreen(f.x, f.y)) drawGroundEffect(ctx, f);
   if (UI.placing && UI.hoverTile) drawPlacement(ctx);
 
   // 深度排序
@@ -656,7 +736,7 @@ function render() {
     else drawUnit(ctx, e);
   }
   for (const pr of G.projs) drawProj(ctx, pr);
-  for (const f of G.effects) if (f.k !== 'scorch' && f.k !== 'corpse' && f.k !== 'wreck' && f.k !== 'shock' && onScreen(f.x !== undefined ? f.x : f.x1, f.y !== undefined ? f.y : f.y1, 200)) drawEffect(ctx, f);
+  for (const f of G.effects) if (f.k !== 'scorch' && f.k !== 'corpse' && f.k !== 'wreck' && f.k !== 'hcorpse' && f.k !== 'shock' && onScreen(f.x !== undefined ? f.x : f.x1, f.y !== undefined ? f.y : f.y1, 200)) drawEffect(ctx, f);
 
   for (const e of list) {
     if (e.kind === 'doodad') continue;

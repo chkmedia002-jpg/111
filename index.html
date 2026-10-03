@@ -44,25 +44,10 @@
 
 <div id="menu" class="overlay">
   <div class="panel">
-    <h1>鋼鐵黎明 <span>2050</span></h1>
-    <p class="story">2050 年,稀土資源枯竭引爆全球危機。大西洋聯盟與歐亞協約為爭奪最後的稀土礦脈,
-      在中亞荒原爆發全面衝突。雷射與電磁砲取代了火藥,但戰爭的本質從未改變——<br><b>指揮官,選擇你的陣營。</b></p>
-    <div class="factions">
-      <div class="faction sel" data-f="ac">
-        <div class="flag ac"></div>
-        <h2>大西洋聯盟</h2>
-        <small>Atlantic Coalition</small>
-        <p>高能雷射武器與精密電子戰。單位精準、射速快,但裝甲較薄。</p>
-        <ul><li>赫利俄斯雷射戰車</li><li>日冕光束砲車</li><li>雷射防禦塔</li></ul>
-      </div>
-      <div class="faction" data-f="ep">
-        <div class="flag ep"></div>
-        <h2>歐亞協約</h2>
-        <small>Eurasian Pact</small>
-        <p>電磁軌道砲與重裝甲。單位厚重、火力強大,但速度較慢。</p>
-        <ul><li>雷神重型戰車</li><li>電磁軌道砲車</li><li>電磁砲塔</li></ul>
-      </div>
-    </div>
+    <div id="eras"><button data-era="2050" class="sel">2050 稀土戰爭</button><button data-era="ming">1592 壬辰之役(明朝)</button></div>
+    <h1 id="menu-title"></h1>
+    <p class="story"><span id="menu-story"></span><br><b>指揮官,選擇你的陣營。</b></p>
+    <div class="factions" id="factions"></div>
     <div class="row">
       <label>電腦難度
         <select id="difficulty">
@@ -73,7 +58,7 @@
       </label>
       <button id="start">開始作戰</button>
     </div>
-    <p class="hint">目標:摧毀敵方所有建築。按 F1 查看操作說明。</p>
+    <p class="hint" id="menu-hint">目標:摧毀敵方所有建築。按 F1 查看操作說明。</p>
   </div>
 </div>
 
@@ -114,12 +99,14 @@
 </div>
 
 <script src="js/data.js"></script>
+<script src="js/ming.js"></script>
 <script src="js/map.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/game.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/render.js"></script>
 <script src="js/models.js"></script>
+<script src="js/models_ming.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>
 </body>

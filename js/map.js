@@ -24,8 +24,8 @@ function makeNoise(rng, cell) {
 }
 
 class GameMap {
-  constructor(seed) {
-    this.w = MAP_W; this.h = MAP_H;
+  constructor(seed, nPlayers = 2) {
+    this.w = MAP_W; this.h = MAP_H; this.n = nPlayers;
     const n = MAP_W * MAP_H;
     this.terrain = new Uint8Array(n);
     this.ore = new Float32Array(n);
@@ -50,6 +50,7 @@ class GameMap {
     this.rng = rng;
     const nA = makeNoise(rng, 9), nB = makeNoise(rng, 11), nC = makeNoise(rng, 6), nD = makeNoise(rng, 5), nE = makeNoise(rng, 4);
     this.starts = [{ x: 6, y: MAP_H - 10 }, { x: MAP_W - 10, y: 6 }];
+    if (this.n >= 3) this.starts.push({ x: MAP_W - 10, y: MAP_H - 10 });
     const sc = this.starts.map(s => ({ x: s.x + 1.5, y: s.y + 1.5 }));
     const near = (x, y, r) => sc.some(s => Math.hypot(x - s.x, y - s.y) < r);
 
@@ -75,7 +76,7 @@ class GameMap {
     }
     fields.push({ x: mid.x, y: mid.y, r: 3.2, gem: 1 });
     fields.push({ x: 18, y: 18, r: 4, gem: 0 });
-    fields.push({ x: MAP_W - 18, y: MAP_H - 18, r: 4, gem: 0 });
+    if (this.n < 3) fields.push({ x: MAP_W - 18, y: MAP_H - 18, r: 4, gem: 0 });
     for (const f of fields) {
       f.x = clamp(f.x, 4, MAP_W - 5); f.y = clamp(f.y, 4, MAP_H - 5);
       const R = Math.ceil(f.r + 1);
@@ -105,8 +106,8 @@ class GameMap {
         }
       }
     };
-    ensure(sc[0].x, sc[0].y, sc[1].x, sc[1].y);
-    for (const f of fields) { ensure(sc[0].x, sc[0].y, f.x, f.y); ensure(sc[1].x, sc[1].y, f.x, f.y); }
+    for (let i = 1; i < sc.length; i++) ensure(sc[0].x, sc[0].y, sc[i].x, sc[i].y);
+    for (const f of fields) for (const s of sc) ensure(s.x, s.y, f.x, f.y);
   }
 
   reachable(ax, ay, bx, by) {

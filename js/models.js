@@ -435,6 +435,7 @@ function drawSoldier(ctx, u, col) {
 // ---------- 單位入口 ----------
 function drawUnit(ctx, u) {
   const lk = u.def.look, col = G.players[u.owner].color;
+  if (FACTIONS[G.players[u.owner].faction].era === 'ming') { drawUnitMing(ctx, u, col); return; }
   if (lk.kind === 'inf') { drawSoldier(ctx, u, col); return; }
   if (lk.kind === 'harv') { drawHarvester(ctx, u, col); return; }
   if (lk.wheels) { drawWheeled(ctx, u, col); return; }
@@ -536,7 +537,8 @@ function drawBuilding(ctx, b) {
   R.zs = b.prog < 1 ? b.prog : 1;
   const t = G.time + b.anim, seed = b.id * 7 + b.tx * 3 + b.ty;
   const conc = '#8e949b', p = G.players[b.owner], powered = !p.lowPower;
-  switch (b.type) {
+  if (FACTIONS[p.faction].era === 'ming') drawBuildingMing(ctx, b, col, t, seed, powered);
+  else switch (b.type) {
     case 'conyard': {
       slab(ctx, b, 2.4, '#767c83');
       hazard(ctx, FSW(x0 + 0.04, x1 - 0.04, y1 - 0.04), 0.3, 2.1, 22);
@@ -947,10 +949,13 @@ function drawOre(ctx, x0, y0, x1, y1) {
     const [cx, cy] = P(x + 0.5, y + 0.5, 0);
     const v = m.variant[i], amt = m.ore[i] / 800;
     const gem = m.oreType[i] === 2;
-    const c1 = gem ? '#6fd8ff' : '#f0b848', c2 = gem ? '#2a78b0' : '#9a6418', c3 = gem ? '#d8f6ff' : '#ffe8a0';
+    const silver = ERAS[G.era] && ERAS[G.era].silver;
+    const c1 = silver ? (gem ? '#f4cc50' : '#dfe3e8') : gem ? '#6fd8ff' : '#f0b848';
+    const c2 = silver ? (gem ? '#9a7418' : '#6e7680') : gem ? '#2a78b0' : '#9a6418';
+    const c3 = silver ? '#ffffff' : gem ? '#d8f6ff' : '#ffe8a0';
     // 礦床地面
     pushA(ctx, 0.16 * Math.min(1, amt + 0.3));
-    ell(ctx, cx, cy, HW * 0.6, HH * 0.6, gem ? '#204a60' : '#6a4a1a');
+    ell(ctx, cx, cy, HW * 0.6, HH * 0.6, silver ? '#3a3e44' : gem ? '#204a60' : '#6a4a1a');
     popA(ctx);
     const n = 2 + Math.floor(amt * 6);
     for (let k = 0; k < n; k++) {
@@ -961,7 +966,7 @@ function drawOre(ctx, x0, y0, x1, y1) {
       poly(ctx, [L, F, T], c1);
       poly(ctx, [F, Rr, T], c2);
       line(ctx, F, T, c3, 0.25);
-      if (gem) glow(ctx, T[0], T[1] + h * 0.3, 2.5, '#7fe0ff', 0.35 + 0.2 * Math.sin(G.time * 3 + k + v));
+      if (gem) glow(ctx, T[0], T[1] + h * 0.3, 2.5, silver ? '#ffe080' : '#7fe0ff', 0.35 + 0.2 * Math.sin(G.time * 3 + k + v));
     }
   }
 }

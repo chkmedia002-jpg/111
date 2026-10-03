@@ -44,9 +44,10 @@ function rebuildGrid() {
     el.className = 'item' + (ok ? '' : ' locked');
     el.dataset.type = t;
     el.appendChild(UI.icons[t]);
-    el.insertAdjacentHTML('beforeend', `<div class="prog"></div><div class="nm">${d.name}</div><div class="cnt"></div><div class="rdy">就緒</div>`);
-    const reqTxt = d.req.length ? '需要:' + d.req.map(r => BUILDINGS[r].name).join('、') : '';
-    el.title = `${d.name}  $${d.cost}\n${d.desc || ''}${ok ? '' : '\n' + reqTxt}\n左鍵:建造/排程(Shift ×5) 右鍵:暫停/取消`;
+    const nm = dname(t, p.faction);
+    el.insertAdjacentHTML('beforeend', `<div class="prog"></div><div class="nm">${nm}</div><div class="cnt"></div><div class="rdy">就緒</div>`);
+    const reqTxt = d.req.length ? '需要:' + d.req.map(r => dname(r, p.faction)).join('、') : '';
+    el.title = `${nm}  $${d.cost}\n${d.desc || ''}${ok ? '' : '\n' + reqTxt}\n左鍵:建造/排程(Shift ×5) 右鍵:暫停/取消`;
     el.onmousedown = ev => {
       ev.preventDefault();
       if (!canBuildType(p, t)) { eva('條件不足', false); return; }
@@ -94,7 +95,7 @@ function updateSidebar() {
   $('power-fill').style.height = (p.powerProd / max * 100) + '%';
   $('power-fill').className = p.lowPower ? 'low' : (p.powerProd - p.powerUse < 30 ? 'warn' : '');
   $('power-use').style.bottom = (p.powerUse / max * 100) + '%';
-  $('powerbar').title = `電力 ${Math.round(p.powerUse)} / ${Math.round(p.powerProd)}`;
+  $('powerbar').title = `${ERAS[G.era].power} ${Math.round(p.powerUse)} / ${Math.round(p.powerProd)}`;
   $('power-txt').textContent = `${Math.round(p.powerUse)}/${Math.round(p.powerProd)}`;
   updateSuperPanel();
   $('btn-repair').classList.toggle('on', UI.mode === 'repair');
@@ -132,10 +133,10 @@ function updateInfo() {
     if (e.kind === 'unit' && e.weapon) extra = `<br>武器射程:${e.weapon.range}`;
     if (e.kind === 'unit' && !d.harvester) extra += `<br>等級:${VET[e.rank].name}`;
     if (e.kind === 'bld' && d.power) extra = `<br>電力:${d.power > 0 ? '+' : ''}${d.power}`;
-    el.innerHTML = `<b style="color:${G.players[e.owner].color}">${d.name}</b>${own ? '' : '(敵方)'}<br>生命:${Math.ceil(e.hp)} / ${e.maxHp}${extra}`;
+    el.innerHTML = `<b style="color:${G.players[e.owner].color}">${dname(e.type, G.players[e.owner].faction)}</b>${own ? '' : '(敵方)'}<br>生命:${Math.ceil(e.hp)} / ${e.maxHp}${extra}`;
   } else {
     const counts = {};
-    for (const e of s) counts[e.def.name] = (counts[e.def.name] || 0) + 1;
+    for (const e of s) { const n = dname(e.type, G.players[e.owner].faction); counts[n] = (counts[n] || 0) + 1; }
     el.innerHTML = `已選取 ${s.length} 個單位<br>` + Object.entries(counts).map(([n, c]) => `${n} ×${c}`).join('<br>');
   }
 }

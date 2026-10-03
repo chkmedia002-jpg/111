@@ -70,6 +70,11 @@ function sfx(name, x, y) {
     case 'ready': _osc('sine', 660, 660, 0.12, 0.15, out); setTimeout(() => Audio2.ctx && _osc('sine', 990, 990, 0.15, 0.15, out), 120); break;
     case 'place': _noise(0.3, 0.5, 300, 1, out); _osc('square', 200, 100, 0.15, 0.1, out); break;
     case 'sell': _osc('sine', 1200, 600, 0.3, 0.15, out); break;
+    case 'musket': _noise(0.25, 0.9, 900, 0.8, out); _noise(0.06, 0.7, 3000, 1, out, 'highpass'); break;
+    case 'bow': _osc('triangle', 220, 120, 0.12, 0.12, out); _noise(0.15, 0.15, 2500, 1, out, 'bandpass'); break;
+    case 'clang': _osc('square', 1400, 1100, 0.08, 0.06, out); _osc('triangle', 2600, 2200, 0.15, 0.06, out); _noise(0.05, 0.3, 4000, 2, out, 'bandpass'); break;
+    case 'cannonOld': _noise(0.9, 1.0, 350, 1, out); _osc('sine', 80, 25, 0.7, 0.7, out); break;
+    case 'whoosh': _noise(0.5, 0.4, 600, 0.6, out, 'bandpass'); break;
     case 'ack': _osc('square', 500, 800, 0.06, 0.06, out); break;
   }
 }
@@ -77,6 +82,7 @@ function sfx(name, x, y) {
 // 語音播報 + 畫面訊息
 let _evaVoice = null, _evaLast = {};
 function eva(text, speak = true) {
+  text = eraText(text);
   UI.message(text);
   if (!speak || !Audio2.on || !('speechSynthesis' in window)) return;
   const now = performance.now();

@@ -91,3 +91,11 @@ button#start:hover, button#again:hover { filter: brightness(1.2); }
 #super .sbar { height: 6px; background: #222; }
 #super .sfill { height: 100%; background: linear-gradient(90deg, #a60, #fd5); }
 #super.ready { cursor: pointer; border-color: #fd5; animation: flash 1s infinite; }
+
+#eras { display: flex; gap: 6px; margin-bottom: 14px; }
+#eras button { flex: 1; padding: 8px; background: #12171c; color: #aab4be; border: 1px solid #3c4650; cursor: pointer; font-family: inherit; font-size: 14px; border-radius: 3px; }
+#eras button.sel { color: #fff; border-color: #ffd24a; background: #2a2412; }
+.factions { flex-wrap: wrap; }
+.faction { min-width: 180px; }
+body[data-era="ming"] #menu { background: radial-gradient(ellipse at center, #3a1e14 0%, #0a0604 75%); }
+body[data-era="ming"] .panel h1 span { color: #ffb040; text-shadow: 0 0 14px rgba(255,140,40,.7); }

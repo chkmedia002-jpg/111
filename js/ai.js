@@ -84,7 +84,7 @@ class AI {
     if (harv < wantHarv && !harvQueued && canBuildType(p, 'harvester')) qv.list.unshift('harvester');
     const saving = qd.cur && getDef(qd.cur.type).super;
     if (qi.list.length < 2 && p.credits > 300 && !saving) {
-      const opts = typesFor(p, 'inf').filter(t => canBuildType(p, t));
+      const opts = typesFor(p, 'inf').filter(t => canBuildType(p, t) && !UNITS[t].engineer);
       if (opts.length) queueItem(p, Math.random() < 0.55 ? opts[0] : opts[opts.length - 1]);
     }
     if (qv.list.length < 2 && p.credits > 700 && !saving) {
@@ -161,7 +161,13 @@ class AI {
   findSpot(type) {
     const p = this.p, d = BUILDINGS[type], m = G.map;
     const [cx, cy] = this.baseCenter();
-    const en = this.enemy, es = G.map.starts[en.startIdx];
+    let es = null, ed = 1e9;
+    for (const q of G.players) {
+      if (q.id === p.id || q.defeated) continue;
+      const s = G.map.starts[q.startIdx], d = dist(s.x, s.y, cx, cy);
+      if (d < ed) { ed = d; es = s; }
+    }
+    if (!es) es = { x: MAP_W / 2, y: MAP_H / 2 };
     let best = null, bs = 1e9;
     for (let ty = Math.floor(cy) - 12; ty <= cy + 12; ty++) for (let tx = Math.floor(cx) - 12; tx <= cx + 12; tx++) {
       if (!canPlace(p, type, tx, ty)) continue;
