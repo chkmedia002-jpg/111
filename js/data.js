@@ -136,12 +136,18 @@ function shade(hex, f) {
   const key = hex + f;
   let v = _shadeCache.get(key);
   if (v) return v;
-  let h = hex.replace('#', '');
-  if (h.length === 3) h = h.split('').map(c => c + c).join('');
-  const n = parseInt(h, 16);
-  const r = clamp(Math.round(((n >> 16) & 255) * f), 0, 255);
-  const g = clamp(Math.round(((n >> 8) & 255) * f), 0, 255);
-  const b = clamp(Math.round((n & 255) * f), 0, 255);
+  let r0, g0, b0;
+  if (hex[0] === 'r') {
+    [r0, g0, b0] = hex.match(/[\d.]+/g).map(Number);
+  } else {
+    let h = hex.replace('#', '');
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    const n = parseInt(h, 16);
+    r0 = (n >> 16) & 255; g0 = (n >> 8) & 255; b0 = n & 255;
+  }
+  const r = clamp(Math.round(r0 * f), 0, 255);
+  const g = clamp(Math.round(g0 * f), 0, 255);
+  const b = clamp(Math.round(b0 * f), 0, 255);
   v = `rgb(${r},${g},${b})`;
   _shadeCache.set(key, v);
   return v;

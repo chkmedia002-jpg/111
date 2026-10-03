@@ -1,19 +1,16 @@
 'use strict';
 // ===== 主迴圈與啟動 =====
 const SIDEBAR_W = 268;
-let lowCv = null, viewCtx = null;
 
 function resize() {
   const cv = $('view');
   const w = Math.max(160, window.innerWidth - SIDEBAR_W), h = window.innerHeight;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
   cv.style.width = w + 'px'; cv.style.height = h + 'px';
-  cv.width = w; cv.height = h;
-  R.w = Math.ceil(w / SCALE); R.h = Math.ceil(h / SCALE);
-  lowCv.width = R.w; lowCv.height = R.h;
-  R.ctx = lowCv.getContext('2d');
-  R.ctx.imageSmoothingEnabled = false;
-  viewCtx = cv.getContext('2d');
-  viewCtx.imageSmoothingEnabled = false;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  R.w = w / R.zoom; R.h = h / R.zoom;
+  R.res = R.zoom * dpr * (cv.width / (w * dpr));
+  R.ctx = cv.getContext('2d');
   if (G.map) clampCamera();
 }
 
@@ -30,7 +27,6 @@ function frame(now) {
     }
     updateHover();
     render();
-    viewCtx.drawImage(lowCv, 0, 0, R.w * SCALE, R.h * SCALE);
     updateSidebar();
     drawMinimap(rdt);
   }
@@ -55,7 +51,6 @@ function startGame() {
 }
 
 window.addEventListener('load', () => {
-  lowCv = document.createElement('canvas');
   R.cv = $('view');
   resize();
   window.addEventListener('resize', resize);

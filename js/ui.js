@@ -150,7 +150,7 @@ function drawMinimap(dt) {
   MM.t = 0.25;
   const cv = $('minimap'), ctx = cv.getContext('2d'), p = me(), m = G.map;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height);
-  ctx.drawImage(R.terrain, 0, 0, R.terrain.width * MM.k, R.terrain.height * MM.k);
+  ctx.drawImage(R.miniTerrain, 0, 0);
   const tw = HW * MM.k * 2, th = HH * MM.k * 2;
   for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
     const i = m.idx(x, y);
@@ -208,7 +208,7 @@ function pickEntity(sx, sy) {
 
 function mouseLow(ev) {
   const r = R.cv.getBoundingClientRect();
-  return [(ev.clientX - r.left) / SCALE, (ev.clientY - r.top) / SCALE];
+  return [(ev.clientX - r.left) / R.zoom, (ev.clientY - r.top) / R.zoom];
 }
 function ownSelUnits() { return G.sel.filter(e => e.alive && e.kind === 'unit' && e.owner === G.human); }
 
@@ -225,6 +225,17 @@ function initInput() {
     }
   });
   cv.addEventListener('mouseleave', () => { UI.mouse.in = false; });
+  cv.addEventListener('wheel', ev => {
+    if (!G.map) return;
+    ev.preventDefault();
+    const [mx, my] = mouseLow(ev);
+    const ix = mx + R.camX, iy = my + R.camY;
+    R.zoom = clamp(R.zoom * (ev.deltaY < 0 ? 1.15 : 1 / 1.15), 1.2, 6);
+    resize();
+    const [nx, ny] = mouseLow(ev);
+    R.camX = ix - nx; R.camY = iy - ny;
+    clampCamera();
+  }, { passive: false });
   cv.addEventListener('mousedown', ev => {
     audioInit();
     if (!G.map || G.over) return;

@@ -5,7 +5,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090b; col
 .hidden { display: none !important; }
 
 #game { position: fixed; inset: 0; display: flex; }
-#view { display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
+#view { display: block; background: #000; }
 
 #msg { position: fixed; left: 12px; top: 10px; pointer-events: none; font-size: 15px; }
 #msg div { color: #9fffb0; text-shadow: 0 0 4px #000, 1px 1px 0 #000; margin-bottom: 3px; transition: opacity .6s; letter-spacing: 1px; }
