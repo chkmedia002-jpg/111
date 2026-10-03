@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>鋼鐵黎明 2050</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game">
+  <canvas id="view"></canvas>
+  <div id="msg"></div>
+  <aside id="sidebar">
+    <div id="sb-head">
+      <div id="credits">$ 0</div>
+    </div>
+    <canvas id="minimap" width="240" height="120"></canvas>
+    <div id="tabs">
+      <button data-tab="bld">建築</button><button data-tab="def">防禦</button><button data-tab="inf">步兵</button><button data-tab="veh">載具</button>
+    </div>
+    <div id="sb-mid">
+      <div id="powercol">
+        <div id="powerbar"><div id="power-fill"></div><div id="power-use"></div></div>
+        <div id="power-txt"></div>
+      </div>
+      <div id="buildgrid"></div>
+    </div>
+    <div id="tools">
+      <button id="btn-repair" title="修理建築">🔧 修理</button>
+      <button id="btn-sell" title="變賣建築(退還一半)">$ 變賣</button>
+      <select id="speed" title="遊戲速度">
+        <option value="0.75">慢速</option>
+        <option value="1" selected>正常</option>
+        <option value="1.5">快速</option>
+        <option value="2">極速</option>
+      </select>
+      <button id="btn-sound" title="音效開關">🔊</button>
+      <button id="btn-help" title="操作說明 (F1)">?</button>
+    </div>
+    <div id="info"></div>
+  </aside>
+</div>
+
+<div id="menu" class="overlay">
+  <div class="panel">
+    <h1>鋼鐵黎明 <span>2050</span></h1>
+    <p class="story">2050 年,稀土資源枯竭引爆全球危機。大西洋聯盟與歐亞協約為爭奪最後的稀土礦脈,
+      在中亞荒原爆發全面衝突。雷射與電磁砲取代了火藥,但戰爭的本質從未改變——<br><b>指揮官,選擇你的陣營。</b></p>
+    <div class="factions">
+      <div class="faction sel" data-f="ac">
+        <div class="flag ac"></div>
+        <h2>大西洋聯盟</h2>
+        <small>Atlantic Coalition</small>
+        <p>高能雷射武器與精密電子戰。單位精準、射速快,但裝甲較薄。</p>
+        <ul><li>赫利俄斯雷射戰車</li><li>日冕光束砲車</li><li>雷射防禦塔</li></ul>
+      </div>
+      <div class="faction" data-f="ep">
+        <div class="flag ep"></div>
+        <h2>歐亞協約</h2>
+        <small>Eurasian Pact</small>
+        <p>電磁軌道砲與重裝甲。單位厚重、火力強大,但速度較慢。</p>
+        <ul><li>雷神重型戰車</li><li>電磁軌道砲車</li><li>電磁砲塔</li></ul>
+      </div>
+    </div>
+    <div class="row">
+      <label>電腦難度
+        <select id="difficulty">
+          <option value="easy">簡單</option>
+          <option value="normal" selected>普通</option>
+          <option value="hard">困難</option>
+        </select>
+      </label>
+      <button id="start">開始作戰</button>
+    </div>
+    <p class="hint">目標:摧毀敵方所有建築。按 F1 查看操作說明。</p>
+  </div>
+</div>
+
+<div id="end" class="overlay hidden">
+  <div class="panel small">
+    <h1>勝利</h1>
+    <p></p>
+    <button id="again">返回主選單</button>
+  </div>
+</div>
+
+<div id="pause" class="overlay hidden"><div class="panel small"><h1>暫停</h1><p>按 P 繼續</p></div></div>
+
+<div id="help" class="overlay hidden">
+  <div class="panel">
+    <h1>操作說明</h1>
+    <table>
+      <tr><td>左鍵 / 拖曳</td><td>選取單位 / 框選</td></tr>
+      <tr><td>Shift + 左鍵</td><td>加選 / 取消選取</td></tr>
+      <tr><td>雙擊單位</td><td>選取畫面中同類單位</td></tr>
+      <tr><td>右鍵</td><td>移動 / 攻擊目標(採集車:指定礦區)</td></tr>
+      <tr><td>Ctrl + 右鍵</td><td>攻擊移動(沿途交戰)</td></tr>
+      <tr><td>選取兵營/工廠 + 右鍵</td><td>設定集結點</td></tr>
+      <tr><td>方向鍵 / 滑鼠移到邊緣 / 中鍵拖曳</td><td>移動視角</td></tr>
+      <tr><td>小地圖</td><td>左鍵移動視角,右鍵下令移動</td></tr>
+      <tr><td>Ctrl + 1~9 / 1~9</td><td>編組 / 叫出編組(連按兩下跳至該處)</td></tr>
+      <tr><td>Q / Ctrl + A</td><td>選取畫面中 / 全部戰鬥單位</td></tr>
+      <tr><td>S</td><td>停止</td></tr>
+      <tr><td>H / 空白鍵</td><td>回到基地 / 跳至最近警報</td></tr>
+      <tr><td>P / Tab / Esc</td><td>暫停 / 切換建造分頁 / 取消</td></tr>
+      <tr><td>側欄左鍵 / 右鍵</td><td>建造(Shift 一次 5 個)/ 暫停、取消</td></tr>
+    </table>
+    <p class="hint">建築完成後點擊「就緒」圖示,再於地圖上放置。電力不足時生產減速、防禦塔停擺。點任意處關閉。</p>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/map.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
