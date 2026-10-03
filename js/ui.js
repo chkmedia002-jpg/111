@@ -96,9 +96,29 @@ function updateSidebar() {
   $('power-use').style.bottom = (p.powerUse / max * 100) + '%';
   $('powerbar').title = `電力 ${Math.round(p.powerUse)} / ${Math.round(p.powerProd)}`;
   $('power-txt').textContent = `${Math.round(p.powerUse)}/${Math.round(p.powerProd)}`;
+  updateSuperPanel();
   $('btn-repair').classList.toggle('on', UI.mode === 'repair');
   $('btn-sell').classList.toggle('on', UI.mode === 'sell');
   updateInfo();
+}
+
+function updateSuperPanel() {
+  const el = $('super');
+  const b = G.entities.find(e => e.alive && e.owner === G.human && e.def.super && e.prog >= 1);
+  if (!b) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  const f = b.charge / b.def.charge, ready = f >= 1;
+  if (!el.dataset.init) {
+    el.dataset.init = 1;
+    el.innerHTML = '<div class="sname"></div><div class="sbar"><div class="sfill"></div></div>';
+    el.onclick = () => {
+      const sb = G.entities.find(e => e.alive && e.owner === G.human && e.def.super && e.prog >= 1);
+      if (sb && sb.charge >= sb.def.charge) { UI.mode = 'super'; UI.superB = sb; UI.placing = null; sfx('click'); eva('選擇目標', false); }
+    };
+  }
+  el.classList.toggle('ready', ready);
+  el.querySelector('.sname').textContent = b.def.name + (ready ? '  ▶ 點擊發射' : `  ${fmtTime(b.def.charge - b.charge)}`);
+  el.querySelector('.sfill').style.width = (f * 100) + '%';
 }
 
 function updateInfo() {
@@ -110,6 +130,7 @@ function updateInfo() {
     let extra = '';
     if (e.kind === 'unit' && d.harvester) extra = `<br>載貨:${Math.floor(e.cargo)} / ${HARV_CAP}`;
     if (e.kind === 'unit' && e.weapon) extra = `<br>武器射程:${e.weapon.range}`;
+    if (e.kind === 'unit' && !d.harvester) extra += `<br>等級:${VET[e.rank].name}`;
     if (e.kind === 'bld' && d.power) extra = `<br>電力:${d.power > 0 ? '+' : ''}${d.power}`;
     el.innerHTML = `<b style="color:${G.players[e.owner].color}">${d.name}</b>${own ? '' : '(敵方)'}<br>生命:${Math.ceil(e.hp)} / ${e.maxHp}${extra}`;
   } else {
@@ -212,6 +233,12 @@ function initInput() {
     if (ev.button === 2) { rightClick(x, y, ev); return; }
     if (ev.button !== 0) return;
     if (UI.placing) { tryPlace(); return; }
+    if (UI.mode === 'super') {
+      const [wx, wy] = screenToWorld(x, y);
+      if (UI.superB && G.map.inb(Math.floor(wx), Math.floor(wy))) fireSuper(UI.superB, wx, wy);
+      UI.mode = null; UI.superB = null;
+      return;
+    }
     if (UI.mode) {
       const e = pickEntity(x, y);
       if (e && e.kind === 'bld' && e.owner === G.human) {
@@ -313,6 +340,15 @@ function rightClick(x, y, ev) {
     return;
   }
   const t = pickEntity(x, y);
+  const engs = us.filter(u => u.def.engineer);
+  if (engs.length && t && t.kind === 'bld' && (t.owner !== G.human || t.hp < t.maxHp)) {
+    cmdCapture(engs, t);
+    const rest = us.filter(u => !u.def.engineer);
+    if (t.owner !== G.human) cmdAttack(rest, t);
+    G.effects.push({ k: 'marker', x: t.x, y: t.y, c: '#ffd040', t: 0, dur: 0.5 });
+    sfx('ack');
+    return;
+  }
   if (t && t.owner !== G.human) {
     cmdAttack(us, t);
     G.effects.push({ k: 'marker', x: t.x, y: t.y, c: '#ff4040', t: 0, dur: 0.5 });
@@ -350,6 +386,7 @@ function updateHover() {
   UI.hoverEnt = pickEntity(UI.mouse.x, UI.mouse.y);
   let cur = 'default';
   if (UI.placing) cur = 'cell';
+  else if (UI.mode === 'super') cur = 'crosshair';
   else if (UI.mode === 'sell') cur = 'copy';
   else if (UI.mode === 'repair') cur = 'help';
   else if (UI.hoverEnt && UI.hoverEnt.owner !== G.human && ownSelUnits().some(u => u.weapon)) cur = 'crosshair';

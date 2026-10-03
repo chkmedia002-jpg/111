@@ -4,7 +4,7 @@ const HARV_CAP = 700, HARV_RATE = 110, UNLOAD_RATE = 260;
 
 const G = {
   map: null, entities: [], byId: new Map(), nextId: 1,
-  players: [], human: 0, effects: [], projs: [],
+  players: [], human: 0, effects: [], projs: [], strikes: [], reveals: [],
   time: 0, over: false, sel: [], groups: {}, speed: 1,
   difficulty: 'normal'
 };
@@ -51,6 +51,11 @@ function canBuildType(p, type) {
   const d = getDef(type);
   if (d.buildable === false) return false;
   if (d.faction && d.faction !== p.faction) return false;
+  if (d.unique) {
+    if (p.bcount[type]) return false;
+    const q = p.queues[d.cat];
+    if ((q.cur && q.cur.type === type) || q.ready === type) return true;
+  }
   return reqMet(p, type);
 }
 function typesFor(p, cat) {
@@ -170,6 +175,7 @@ function canPlace(p, type, tx, ty) {
 
 function placeBuilding(p, type, tx, ty, instant) {
   const b = new Building(type, p.id, tx, ty);
+  if (b.def.super && p.id !== G.human) eva('警告:偵測到敵方超級武器');
   if (instant) b.prog = 1;
   addEntity(b);
   const m = G.map;
@@ -225,9 +231,20 @@ function findEnemyNear(src, r, unitsOnly) {
 // ===== 傷害與戰鬥 =====
 function armorOf(e) { return e.kind === 'bld' ? 'bld' : e.def.armor; }
 
+function vetOf(e) { return VET[e && e.rank ? e.rank : 0]; }
+function giveXp(a, value) {
+  if (!a || a.kind !== 'unit' || !a.alive) return;
+  a.xp += value;
+  const r = a.xp >= a.def.cost * 3 ? 2 : a.xp >= a.def.cost ? 1 : 0;
+  if (r > a.rank) {
+    a.rank = r;
+    if (a.owner === G.human) { eva(r === 2 ? '單位晉升為精英' : '單位晉升為老兵', false); sfx('ready'); }
+  }
+}
+
 function damage(t, amount, wh, attacker) {
   if (!t.alive) return;
-  t.hp -= amount * WARHEADS[wh][armorOf(t)];
+  t.hp -= amount * WARHEADS[wh][armorOf(t)] * (t.kind === 'unit' ? vetOf(t).armor : 1);
   t.hitT = G.time;
   const p = G.players[t.owner];
   if (p.id === G.human && G.time - p.lastAttackWarn > 20) {
@@ -236,18 +253,21 @@ function damage(t, amount, wh, attacker) {
     UI.alertAt = [t.x, t.y, G.time];
   }
   if (p.ai && attacker && attacker.alive) p.ai.onAttacked(t, attacker);
-  if (t.hp <= 0) { kill(t); return; }
+  if (t.hp <= 0) {
+    if (attacker && attacker.owner !== t.owner) giveXp(attacker, t.def.cost || 500);
+    kill(t); return;
+  }
   // 反擊
   if (t.kind === 'unit' && t.weapon && attacker && attacker.alive && t.order.t === 'idle') {
     t.order = { t: 'attack', target: attacker, auto: true, home: [t.x, t.y] };
   }
 }
 
-function damageArea(x, y, r, dmg, wh, owner, except) {
+function damageArea(x, y, r, dmg, wh, owner, except, attacker) {
   for (const e of G.entities) {
     if (!e.alive || e === except || e.owner === owner) continue;
     const d = e.kind === 'bld' ? distTo({ x, y }, e) : Math.hypot(e.x - x, e.y - y);
-    if (d <= r) damage(e, dmg * (1 - d / r * 0.5), wh, null);
+    if (d <= r) damage(e, dmg * (1 - d / r * 0.5), wh, attacker || null);
   }
 }
 
@@ -297,9 +317,10 @@ function fire(src, t, w) {
   if (t.kind === 'bld') { tx = clamp(src.x, t.tx + 0.3, t.tx + t.w - 0.3); ty = clamp(src.y, t.ty + 0.3, t.ty + t.h - 0.3); }
   tx += (Math.random() - 0.5) * 0.2; ty += (Math.random() - 0.5) * 0.2;
   sfx(w.snd, src.x, src.y);
+  const dmg = w.dmg * vetOf(src).dmg;
   if (w.kind === 'laser' || w.kind === 'rail') {
-    damage(t, w.dmg, w.wh, src);
-    if (w.splash) damageArea(tx, ty, w.splash, w.dmg * 0.5, w.wh, src.owner, t);
+    damage(t, dmg, w.wh, src);
+    if (w.splash) damageArea(tx, ty, w.splash, dmg * 0.5, w.wh, src.owner, t, src);
     G.effects.push({ k: w.kind === 'laser' ? 'beam' : 'rail', x1: mx, y1: my, z1: mz, x2: tx, y2: ty, z2: az,
       w: w.width || 2, c: w.kind === 'laser' ? FACTIONS.ac.beam : FACTIONS.ep.beam, t: 0, dur: w.kind === 'laser' ? 0.3 : 0.5 });
     G.effects.push({ k: 'spark', x: tx, y: ty, z: az, c: w.kind === 'laser' ? '#ffd0d0' : '#e0f6ff', t: 0, dur: 0.25 });
@@ -309,7 +330,7 @@ function fire(src, t, w) {
     const speed = w.kind === 'bullet' ? 24 : w.speed;
     const d = Math.hypot(tx - mx, ty - my);
     G.projs.push({ k: w.kind, x0: mx, y0: my, z0: mz, x1: tx, y1: ty, z1: az, t: 0, dur: Math.max(0.05, d / speed),
-      target: t, w, owner: src.owner, src, c: w.color || '#ffd27a' });
+      target: t, w, dmg, owner: src.owner, src, c: w.color || '#ffd27a' });
     G.effects.push({ k: 'flash', x: mx, y: my, z: mz, t: 0, dur: 0.08 });
   }
 }
@@ -323,8 +344,8 @@ function updateProjs(dt) {
     }
     if (p.t >= p.dur) {
       p.done = true;
-      if (p.target.alive) damage(p.target, p.w.dmg, p.w.wh, p.src);
-      if (p.w.splash) damageArea(p.x1, p.y1, p.w.splash, p.w.dmg * 0.5, p.w.wh, p.owner, p.target);
+      if (p.target.alive) damage(p.target, p.dmg, p.w.wh, p.src);
+      if (p.w.splash) damageArea(p.x1, p.y1, p.w.splash, p.dmg * 0.5, p.w.wh, p.owner, p.target, p.src);
       if (p.k === 'bullet') G.effects.push({ k: 'spark', x: p.x1, y: p.y1, z: p.z1, c: '#ffe9a0', t: 0, dur: 0.12 });
       else { addExplosion(p.x1, p.y1, p.k === 'shell' ? 0.55 : 0.45, 0); sfx('hit', p.x1, p.y1); }
     }
@@ -343,7 +364,7 @@ class Unit {
     this.cool = Math.random() * 0.5; this.scan = Math.random() * 0.5; this.repath = 0;
     this.anim = Math.random() * 10; this.moving = false; this.stuckT = 0; this.bestD = 1e9;
     this.cargo = 0; this.hstate = 'seek'; this.htile = null; this.wait = 0; this.ref = null;
-    this.hitT = -99;
+    this.hitT = -99; this.xp = 0; this.rank = 0;
   }
   muzzle() {
     const L = this.def.cat === 'inf' ? 0.15 : this.def.look.L * 0.55;
@@ -400,9 +421,13 @@ class Unit {
   }
   update(dt) {
     this.cool -= dt; this.scan -= dt;
+    if (this.rank === 2 && this.hp < this.maxHp && G.time - this.hitT > 3) this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.02 * dt);
     if (this.def.harvester) { this.updateHarvester(dt); return; }
     const o = this.order, w = this.weapon;
     switch (o.t) {
+      case 'capture':
+        this.updateCapture(dt, o);
+        break;
       case 'idle':
         this.moving = false;
         if (w && this.scan <= 0) {
@@ -431,6 +456,30 @@ class Unit {
         break;
     }
   }
+  updateCapture(dt, o) {
+    const t = o.target;
+    if (!t.alive || (t.owner === this.owner && t.hp >= t.maxHp)) { this.order = { t: 'idle' }; this.path = []; return; }
+    if (distTo(this, t) <= 1.2) {
+      if (t.owner === this.owner) {
+        t.hp = t.maxHp;
+        if (this.owner === G.human) eva('建築已修復');
+      } else {
+        const old = G.players[t.owner];
+        t.owner = this.owner; t.repairing = false; t.target = null;
+        if (t.def.super) t.charge = 0;
+        if (this.owner === G.human) eva('建築已佔領');
+        else if (old.id === G.human) eva('我方建築被佔領');
+        refreshPlayerStats();
+      }
+      sfx('ready', t.x, t.y);
+      this.alive = false; this.hp = 0;
+      const si = G.sel.indexOf(this); if (si >= 0) G.sel.splice(si, 1);
+      return;
+    }
+    this.repath -= dt;
+    if (this.repath <= 0 || !this.path.length) { this.repath = 1.5; this.pathTo(t.x, t.y); }
+    if (this.followPath(dt) && distTo(this, t) > 1.2) this.repath = 0.5;
+  }
   endAttack(o) {
     if (o.resume) { this.order = o.resume; this.pathTo(o.resume.gx, o.resume.gy); }
     else this.order = { t: 'idle' };
@@ -446,7 +495,7 @@ class Unit {
       let aimed;
       if (this.def.cat === 'inf') { this.dir = ang; this.tdir = ang; aimed = true; }
       else { this.tdir = rotateTo(this.tdir, ang, 5 * dt); aimed = Math.abs(angDiff(this.tdir, ang)) < 0.12; }
-      if (aimed && this.cool <= 0) { fire(this, t, w); this.cool = w.rof * (0.9 + Math.random() * 0.2); }
+      if (aimed && this.cool <= 0) { fire(this, t, w); this.cool = w.rof * vetOf(this).rof * (0.9 + Math.random() * 0.2); }
     } else {
       if (o.auto && o.home && !o.resume && Math.hypot(this.x - o.home[0], this.y - o.home[1]) > 7) {
         this.order = { t: 'move' }; this.pathTo(o.home[0], o.home[1]); return;
@@ -548,6 +597,7 @@ class Building {
     this.weapon = this.def.weapon ? WEAPONS[this.def.weapon] : null;
     this.tdir = Math.PI * 0.75; this.cool = 0; this.scan = 0; this.target = null;
     this.repairing = false; this.hitT = -99; this.anim = Math.random() * 10;
+    this.charge = 0;
   }
   muzzle() { return [this.x + Math.cos(this.tdir) * 0.35, this.y + Math.sin(this.tdir) * 0.35, 16]; }
   update(dt) {
@@ -561,6 +611,14 @@ class Building {
         const cost = heal * this.def.cost / this.maxHp * 0.25;
         if (p.credits >= cost) { p.credits -= cost; this.hp += heal; }
         if (Math.random() < dt * 3) G.effects.push({ k: 'spark', x: this.tx + Math.random() * this.w, y: this.ty + Math.random() * this.h, z: 10 + Math.random() * 8, c: '#7fff7f', t: 0, dur: 0.3 });
+      }
+    }
+    if (this.def.super) {
+      const was = this.charge >= this.def.charge;
+      if (!p.lowPower) this.charge = Math.min(this.def.charge, this.charge + dt);
+      if (!was && this.charge >= this.def.charge) {
+        if (p.id === G.human) eva('超級武器已就緒');
+        else eva('警告:敵方超級武器已就緒');
       }
     }
     const w = this.weapon;
@@ -618,6 +676,57 @@ function cmdAttack(units, target) {
   }
 }
 
+function cmdCapture(units, target) {
+  for (const u of units) { u.order = { t: 'capture', target }; u.repath = 0; }
+}
+
+// ===== 超級武器 =====
+function fireSuper(b, x, y) {
+  if (!b.alive || b.charge < b.def.charge) return false;
+  b.charge = 0;
+  const kind = b.def.super, owner = b.owner;
+  if (owner === G.human) eva(kind === 'orbital' ? '軌道雷射啟動' : '導彈已發射');
+  else eva(kind === 'orbital' ? '警告:敵方軌道雷射已啟動' : '警告:偵測到敵方導彈發射');
+  if (kind === 'orbital') {
+    G.strikes.push({ k: 'orbital', x, y, cx: x, cy: y, owner, t: 0, dur: 4.5, tick: 0 });
+    sfx('laserB', x, y);
+  } else {
+    G.strikes.push({ k: 'missile', x, y, owner, t: 0, dur: 3, sx: b.x, sy: b.y });
+    sfx('rocket', b.x, b.y);
+  }
+  if (owner !== G.human) UI.alertAt = [x, y, G.time];
+  // 目標區域短暫可見
+  G.reveals.push({ x, y, owner, until: G.time + 8 });
+  return true;
+}
+function updateStrikes(dt) {
+  for (const s of G.strikes) {
+    s.t += dt;
+    if (s.k === 'orbital') {
+      if (s.t > 1) {
+        s.tick -= dt;
+        s.cx = s.x + Math.sin(s.t * 1.7) * 0.6; s.cy = s.y + Math.cos(s.t * 1.3) * 0.6;
+        if (s.tick <= 0) {
+          s.tick = 0.2;
+          damageArea(s.cx, s.cy, 2.6, 42, 'siege', s.owner);
+          addExplosion(s.cx + (Math.random() - 0.5) * 2.5, s.cy + (Math.random() - 0.5) * 2.5, 0.8, 0);
+          if (Math.random() < 0.4) sfx('boom', s.cx, s.cy);
+          G.effects.push({ k: 'scorch', x: s.cx, y: s.cy, r: 1.2, t: 0, dur: 30 });
+        }
+      }
+    } else if (s.t >= s.dur && !s.done) {
+      s.done = true;
+      damageArea(s.x, s.y, 3.2, 640, 'siege', s.owner);
+      for (let i = 0; i < 14; i++) addExplosion(s.x + (Math.random() - 0.5) * 5, s.y + (Math.random() - 0.5) * 5, 1 + Math.random(), Math.random() * 0.6);
+      G.effects.push({ k: 'shock', x: s.x, y: s.y, t: 0, dur: 0.8 });
+      G.effects.push({ k: 'scorch', x: s.x, y: s.y, r: 3, t: 0, dur: 60 });
+      sfx('bigboom', s.x, s.y);
+    }
+  }
+  G.strikes = G.strikes.filter(s => s.t < s.dur);
+  G.reveals = G.reveals.filter(r => r.until > G.time);
+}
+
 function cmdStop(units) {
   for (const u of units) { u.path = []; u.order = u.def.harvester ? { t: 'harvest' } : { t: 'idle' }; if (u.def.harvester) u.hstate = 'seek'; }
 }
@@ -651,6 +760,7 @@ function updateGame(dt) {
   for (const e of G.entities) if (e.alive) e.update(dt);
   separate(dt);
   updateProjs(dt);
+  updateStrikes(dt);
   for (const f of G.effects) {
     f.t += dt;
     if (f.k === 'part' && f.t > 0) { f.x += f.vx * dt; f.y += f.vy * dt; f.z += f.vz * dt; f.vz -= 120 * dt; if (f.z < 0) { f.z = 0; f.vz *= -0.3; } }
@@ -714,6 +824,13 @@ function updateFog(p) {
       if (dx * dx + dy * dy <= r2) { const i = y * MAP_W + x; vis[i] = 1; p.explored[i] = 1; }
     }
   }
+  for (const r of G.reveals) {
+    if (r.owner !== p.id) continue;
+    for (let y = Math.max(0, Math.floor(r.y - 4)); y <= Math.min(MAP_H - 1, r.y + 4); y++)
+      for (let x = Math.max(0, Math.floor(r.x - 4)); x <= Math.min(MAP_W - 1, r.x + 4); x++) {
+        if (Math.hypot(x + 0.5 - r.x, y + 0.5 - r.y) <= 4) { vis[y * MAP_W + x] = 1; p.explored[y * MAP_W + x] = 1; }
+      }
+  }
 }
 function isVisible(e) {
   const p = me();
@@ -741,7 +858,7 @@ function checkEnd() {
 function newGame(opts) {
   const seed = opts.seed || (Math.random() * 1e9) | 0;
   G.map = new GameMap(seed);
-  G.entities = []; G.byId = new Map(); G.nextId = 1; G.effects = []; G.projs = [];
+  G.entities = []; G.byId = new Map(); G.nextId = 1; G.effects = []; G.projs = []; G.strikes = []; G.reveals = [];
   G.time = 0; G.over = false; G.sel = []; G.groups = {}; G.difficulty = opts.difficulty;
   const other = opts.faction === 'ac' ? 'ep' : 'ac';
   const swap = (seed & 1) === 1;

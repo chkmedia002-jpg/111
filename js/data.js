@@ -54,6 +54,10 @@ const UNITS = {
     weapon: null, req: ['refinery'], harvester: true, look: { kind: 'harv', L: 1.0, W: 0.7, H: 7 },
     desc: '自動採集稀土礦並運回精煉廠。' },
 
+  engineer: { name: '戰鬥工程師', faction: null, cat: 'inf', cost: 500, hp: 75, armor: 'inf', speed: 1.2, sight: 4,
+    weapon: null, req: ['barracks'], engineer: true, look: { kind: 'inf', gun: 'none' },
+    desc: '右鍵點敵方建築可佔領;點己方受損建築可立即修好。' },
+
   ac_inf: { name: '脈衝步兵', faction: 'ac', cat: 'inf', cost: 150, hp: 100, armor: 'inf', speed: 1.25, sight: 5,
     weapon: 'pulseRifle', req: ['barracks'], look: { kind: 'inf', gun: 'rifle' }, desc: '標準步兵,擅長對付步兵。' },
   ac_laser: { name: '雷射突擊兵', faction: 'ac', cat: 'inf', cost: 350, hp: 110, armor: 'inf', speed: 1.2, sight: 5,
@@ -94,8 +98,20 @@ const BUILDINGS = {
   ac_turret:{ name: '雷射防禦塔', faction: 'ac', cat: 'def', w: 1, h: 1, hp: 750, power: -40, cost: 900, sight: 7, req: ['barracks'],
     weapon: 'laserTurret', desc: '高射速雷射塔,需要電力。' },
   ep_turret:{ name: '電磁砲塔', faction: 'ep', cat: 'def', w: 1, h: 1, hp: 850, power: -40, cost: 900, sight: 7, req: ['barracks'],
-    weapon: 'railTurret', desc: '穿甲電磁砲塔,需要電力。' }
+    weapon: 'railTurret', desc: '穿甲電磁砲塔,需要電力。' },
+  ac_super: { name: '天穹軌道雷射', faction: 'ac', cat: 'def', w: 2, h: 2, hp: 1500, power: -100, cost: 3000, sight: 5, req: ['tech'],
+    super: 'orbital', charge: 300, unique: true, desc: '超級武器:召喚軌道衛星的雷射光束,持續灼燒目標區域。充能 5 分鐘。' },
+  ep_super: { name: '高超音速導彈井', faction: 'ep', cat: 'def', w: 2, h: 2, hp: 1500, power: -100, cost: 3000, sight: 5, req: ['tech'],
+    super: 'missile', charge: 300, unique: true, desc: '超級武器:發射高超音速彈道導彈,造成大範圍毀滅。充能 5 分鐘。' }
 };
+
+// ===== 老兵等級 =====
+// 擊殺價值達自身造價 1 倍 → 老兵,3 倍 → 精英
+const VET = [
+  { name: '新兵', dmg: 1.0, rof: 1.0, armor: 1.0 },
+  { name: '老兵', dmg: 1.2, rof: 0.9, armor: 0.85 },
+  { name: '精英', dmg: 1.45, rof: 0.8, armor: 0.7 }
+];
 
 const CATS = ['bld', 'def', 'inf', 'veh'];
 const CAT_NAMES = { bld: '建築', def: '防禦', inf: '步兵', veh: '載具' };
