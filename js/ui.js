@@ -285,9 +285,10 @@ function initInput() {
   window.addEventListener('keydown', ev => {
     if (!G.map) return;
     UI.keys[ev.key] = true;
+    if (!ev.ctrlKey && !ev.metaKey && !ev.altKey) UI.keys[ev.code] = true;
     const k = ev.key;
     if (k === 'Escape') { UI.placing = null; UI.mode = null; G.sel = []; $('help').classList.add('hidden'); }
-    else if (k === 's' || k === 'S') cmdStop(ownSelUnits());
+    else if (ev.code === 'KeyX') cmdStop(ownSelUnits());
     else if (k === 'h' || k === 'H') { const c = G.entities.find(e => e.alive && e.owner === G.human && e.type === 'conyard') || G.entities.find(e => e.alive && e.owner === G.human); if (c) centerCamera(c.x, c.y); }
     else if (k === ' ') { if (UI.alertAt) centerCamera(UI.alertAt[0], UI.alertAt[1]); ev.preventDefault(); }
     else if ((k === 'a' || k === 'A') && ev.ctrlKey) { ev.preventDefault(); G.sel = G.entities.filter(e => e.alive && e.owner === G.human && e.kind === 'unit' && e.weapon); }
@@ -306,7 +307,8 @@ function initInput() {
     }
     else if (k === 'Tab') { ev.preventDefault(); UI.tab = CATS[(CATS.indexOf(UI.tab) + 1) % CATS.length]; }
   });
-  window.addEventListener('keyup', ev => { UI.keys[ev.key] = false; });
+  window.addEventListener('keyup', ev => { UI.keys[ev.key] = false; UI.keys[ev.code] = false; });
+  window.addEventListener('blur', () => { UI.keys = {}; });
 }
 
 function onScreenEnt(e) { const [sx, sy] = P(e.x, e.y, 0); return sx >= 0 && sy >= 0 && sx <= R.w && sy <= R.h; }
@@ -409,8 +411,9 @@ function updateHover() {
 function updateCamera(dt) {
   const sp = 700 * dt;
   let dx = 0, dy = 0;
-  if (UI.keys.ArrowLeft) dx -= sp; if (UI.keys.ArrowRight) dx += sp;
-  if (UI.keys.ArrowUp) dy -= sp; if (UI.keys.ArrowDown) dy += sp;
+  const K = UI.keys;
+  if (K.ArrowLeft || K.KeyA) dx -= sp; if (K.ArrowRight || K.KeyD) dx += sp;
+  if (K.ArrowUp || K.KeyW) dy -= sp; if (K.ArrowDown || K.KeyS) dy += sp;
   if (UI.mouse.in && !UI.pan && !UI.drag) {
     const e = 6;
     if (UI.mouse.x < e) dx -= sp; if (UI.mouse.x > R.w - e) dx += sp;

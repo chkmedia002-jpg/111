@@ -193,12 +193,12 @@ button#start:hover, button#again:hover { filter: brightness(1.2); }
       <tr><td>工程師 + 右鍵建築</td><td>佔領敵方建築 / 修好己方建築</td></tr>
       <tr><td>超級武器面板</td><td>充能完成後點擊,再左鍵選擇地圖目標</td></tr>
       <tr><td>選取兵營/工廠 + 右鍵</td><td>設定集結點</td></tr>
-      <tr><td>方向鍵 / 滑鼠移到邊緣 / 中鍵拖曳</td><td>移動視角</td></tr>
+      <tr><td>WASD / 方向鍵 / 滑鼠移到邊緣 / 中鍵拖曳</td><td>移動視角</td></tr>
       <tr><td>滑鼠滾輪</td><td>縮放(放大可看清模型細節)</td></tr>
       <tr><td>小地圖</td><td>左鍵移動視角,右鍵下令移動</td></tr>
       <tr><td>Ctrl + 1~9 / 1~9</td><td>編組 / 叫出編組(連按兩下跳至該處)</td></tr>
       <tr><td>Q / Ctrl + A</td><td>選取畫面中 / 全部戰鬥單位</td></tr>
-      <tr><td>S</td><td>停止</td></tr>
+      <tr><td>X</td><td>停止</td></tr>
       <tr><td>H / 空白鍵</td><td>回到基地 / 跳至最近警報</td></tr>
       <tr><td>P / Tab / Esc</td><td>暫停 / 切換建造分頁 / 取消</td></tr>
       <tr><td>側欄左鍵 / 右鍵</td><td>建造(Shift 一次 5 個)/ 暫停、取消</td></tr>
@@ -3766,9 +3766,10 @@ function initInput() {
   window.addEventListener('keydown', ev => {
     if (!G.map) return;
     UI.keys[ev.key] = true;
+    if (!ev.ctrlKey && !ev.metaKey && !ev.altKey) UI.keys[ev.code] = true;
     const k = ev.key;
     if (k === 'Escape') { UI.placing = null; UI.mode = null; G.sel = []; $('help').classList.add('hidden'); }
-    else if (k === 's' || k === 'S') cmdStop(ownSelUnits());
+    else if (ev.code === 'KeyX') cmdStop(ownSelUnits());
     else if (k === 'h' || k === 'H') { const c = G.entities.find(e => e.alive && e.owner === G.human && e.type === 'conyard') || G.entities.find(e => e.alive && e.owner === G.human); if (c) centerCamera(c.x, c.y); }
     else if (k === ' ') { if (UI.alertAt) centerCamera(UI.alertAt[0], UI.alertAt[1]); ev.preventDefault(); }
     else if ((k === 'a' || k === 'A') && ev.ctrlKey) { ev.preventDefault(); G.sel = G.entities.filter(e => e.alive && e.owner === G.human && e.kind === 'unit' && e.weapon); }
@@ -3787,7 +3788,8 @@ function initInput() {
     }
     else if (k === 'Tab') { ev.preventDefault(); UI.tab = CATS[(CATS.indexOf(UI.tab) + 1) % CATS.length]; }
   });
-  window.addEventListener('keyup', ev => { UI.keys[ev.key] = false; });
+  window.addEventListener('keyup', ev => { UI.keys[ev.key] = false; UI.keys[ev.code] = false; });
+  window.addEventListener('blur', () => { UI.keys = {}; });
 }
 
 function onScreenEnt(e) { const [sx, sy] = P(e.x, e.y, 0); return sx >= 0 && sy >= 0 && sx <= R.w && sy <= R.h; }
@@ -3890,8 +3892,9 @@ function updateHover() {
 function updateCamera(dt) {
   const sp = 700 * dt;
   let dx = 0, dy = 0;
-  if (UI.keys.ArrowLeft) dx -= sp; if (UI.keys.ArrowRight) dx += sp;
-  if (UI.keys.ArrowUp) dy -= sp; if (UI.keys.ArrowDown) dy += sp;
+  const K = UI.keys;
+  if (K.ArrowLeft || K.KeyA) dx -= sp; if (K.ArrowRight || K.KeyD) dx += sp;
+  if (K.ArrowUp || K.KeyW) dy -= sp; if (K.ArrowDown || K.KeyS) dy += sp;
   if (UI.mouse.in && !UI.pan && !UI.drag) {
     const e = 6;
     if (UI.mouse.x < e) dx -= sp; if (UI.mouse.x > R.w - e) dx += sp;
