@@ -55,11 +55,11 @@
 </style>
 
 <div id="stage"></div>
-<p id="status" class="status" role="status">載入模型中…</p>
+<p id="status" class="status" role="status">載入模型中…（約 11 MB）</p>
 <div class="label">
   <span class="sub">Rigged 3D model · o-yoroi</span>
   <h1>三日月の武者</h1>
-  <p>黑漆大鎧、三日月前立、背負旗指物。19 根骨骼蒙皮，內含待機、步行、攻擊與參考姿勢動畫。</p>
+  <p>黑漆大鎧、三日月前立、背負旗指物。約 47 萬面、19 根骨骼蒙皮，內含待機、步行、攻擊與參考姿勢動畫。</p>
 </div>
 <div class="controls">
   <div class="group" role="group" aria-label="動作">
@@ -90,7 +90,6 @@ window.addEventListener('error', (e) => fail(e.message));
 if (typeof THREE === 'undefined' || !THREE.GLTFLoader) { fail('three.js 函式庫沒有載入，請檢查網路後重新整理。'); return; }
 const { OrbitControls, RoomEnvironment, GLTFLoader } = THREE;
 
-const GLB = '__GLB_BASE64__';
 const WALK_SPEED = 0.667; // m/s, matches the Walk clip's stride
 
 const stage = document.getElementById('stage');
@@ -147,10 +146,11 @@ function setView(name) {
 }
 setView('ref');
 
-const bin = atob(GLB);
-const bytes = new Uint8Array(bin.length);
-for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-new GLTFLoader().parse(bytes.buffer, '', start, (e) => fail(e.message || String(e)));
+// samurai.glb sits next to this page (about 11 MB)
+fetch('samurai.glb')
+  .then((r) => { if (!r.ok) throw new Error(`samurai.glb 讀取失敗（${r.status}）`); return r.arrayBuffer(); })
+  .then((buf) => new GLTFLoader().parse(buf, '', start, (e) => fail(e.message || String(e))))
+  .catch((e) => fail(location.protocol === 'file:' ? '請用網頁伺服器開啟（例如 npx serve），瀏覽器不允許從本機檔案讀取模型。' : e.message));
 function start(gltf) {
 const model = gltf.scene;
 model.traverse((o) => {
@@ -215,6 +215,7 @@ renderer.setAnimationLoop(() => {
   controls.update();
   renderer.render(scene, camera);
 });
+window.__cam = (p, t) => { controls.autoRotate = false; camera.position.set(...p); controls.target.set(...t); controls.update(); };
 window.__seek = (name, t) => { mixer.stopAllAction(); const a = actions[name]; a.reset().play(); mixer.setTime(t); a.paused = true; current = a; };
 window.__ready = true;
 status.hidden = true;
