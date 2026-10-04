@@ -68,7 +68,7 @@ def process_building(path, code):
     """建築:裁切後整張寬度對齊地面菱形,底部對齊菱形前角"""
     im = remove_bg(Image.open(path))
     im = im.crop(im.getchannel('A').point(lambda a: 255 if a > 24 else 0).getbbox())
-    scale = BLD_WIDTH / im.width
+    scale = min(BLD_WIDTH / im.width, BLD_WIDTH * 1.1 / im.height)   # 高瘦的塔也限制高度,避免檔案過大
     src, n = encode(im, scale)
     return {'bld': True, 'src': src, 'iw': im.width, 'ih': im.height}, n
 
