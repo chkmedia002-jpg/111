@@ -1,0 +1,163 @@
+<title>Crescent Kabuto Samurai</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500&display=swap">
+<style>
+  /* Layout: full-bleed 3D stage, a quiet title block top-left and a control strip bottom-left, like a museum display case label. */
+  :root {
+    --paper: #ecebe6;
+    --paper-deep: #d9d7cf;
+    --ink: #1b1c20;
+    --ink-soft: #5d5e63;
+    --gold: #9a7a2c;
+    --line: rgba(27, 28, 32, 0.16);
+    --display: "Shippori Mincho", "Hiragino Mincho ProN", "Noto Serif CJK TC", serif;
+    --body: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans CJK TC", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #1a1b1f; --paper-deep: #111215; --ink: #ece8dc; --ink-soft: #a29f96; --gold: #d1ad5c;
+      --line: rgba(236, 232, 220, 0.18); color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #1a1b1f; --paper-deep: #111215; --ink: #ece8dc; --ink-soft: #a29f96; --gold: #d1ad5c;
+    --line: rgba(236, 232, 220, 0.18); color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(ellipse at 50% 40%, var(--paper) 0%, var(--paper-deep) 100%);
+    color: var(--ink); font-family: var(--body); overflow: hidden;
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .label {
+    position: fixed; left: 20px; top: calc(16px + env(safe-area-inset-top, 0px));
+    display: grid; gap: 4px; max-width: min(340px, calc(100vw - 40px)); pointer-events: none;
+  }
+  .label h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 1.7rem; letter-spacing: 0.08em; text-wrap: balance; }
+  .label .sub { font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+  .label p { margin: 4px 0 0; font-size: 0.82rem; line-height: 1.6; color: var(--ink-soft); }
+  .controls {
+    position: fixed; left: 20px; right: 20px; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  button {
+    font: 500 0.82rem var(--body); color: var(--ink); background: transparent;
+    border: 1px solid var(--line); border-radius: 2px; padding: 7px 12px; cursor: pointer;
+  }
+  button:hover { border-color: var(--gold); }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  button[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+  .hint { font-size: 0.75rem; color: var(--ink-soft); margin-left: auto; }
+  @media (max-width: 480px) { .hint { display: none; } .label h1 { font-size: 1.35rem; } }
+</style>
+
+<div id="stage"></div>
+<div class="label">
+  <span class="sub">Procedural 3D model · o-yoroi</span>
+  <h1>三日月の武者</h1>
+  <p>黑漆大鎧、三日月前立、背負旗指物，雙手持太刀上段斜舉。</p>
+</div>
+<div class="controls">
+  <button id="rotate" type="button" aria-pressed="true">自動旋轉</button>
+  <button id="front" type="button">正面</button>
+  <button id="side" type="button">側面</button>
+  <button id="ref" type="button">參考角度</button>
+  <span class="hint">拖曳旋轉 · 滾輪縮放 · 右鍵平移</span>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "__THREE__/build/three.module.js", "three/addons/": "__THREE__/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+/*BUILDER*/
+
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 50);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0.15, 1.0, 0);
+controls.enableDamping = true;
+controls.minDistance = 1.2;
+controls.maxDistance = 9;
+controls.autoRotateSpeed = 1.2;
+
+const key = new THREE.DirectionalLight(0xfff4e2, 2.2);
+key.position.set(2.5, 4, 3);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -2, right: 2, top: 3, bottom: -1, near: 0.5, far: 12 });
+key.shadow.bias = -0.0005;
+scene.add(key);
+const rimLight = new THREE.DirectionalLight(0xc8d4ff, 1.0);
+rimLight.position.set(-3, 2.5, -3);
+scene.add(rimLight);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444040, 0.35));
+
+const ground = new THREE.Mesh(new THREE.CircleGeometry(4, 64), new THREE.ShadowMaterial({ opacity: 0.22 }));
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const samurai = buildSamurai(THREE);
+scene.add(samurai);
+
+const views = {
+  ref: [0.35, 1.15, 4.0],
+  front: [0.15, 1.1, 4.2],
+  side: [4.2, 1.2, 0.2],
+};
+function setView(name) {
+  camera.position.set(...views[name]);
+  controls.target.set(0.2, 1.05, 0);
+  controls.update();
+}
+setView('ref');
+
+const rotateBtn = document.getElementById('rotate');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+controls.autoRotate = !reduce;
+rotateBtn.setAttribute('aria-pressed', String(controls.autoRotate));
+rotateBtn.onclick = () => {
+  controls.autoRotate = !controls.autoRotate;
+  rotateBtn.setAttribute('aria-pressed', String(controls.autoRotate));
+};
+for (const id of ['front', 'side', 'ref']) {
+  document.getElementById(id).onclick = () => {
+    controls.autoRotate = false;
+    rotateBtn.setAttribute('aria-pressed', 'false');
+    setView(id);
+  };
+}
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.fov = w < h ? 44 : 32;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+
+renderer.setAnimationLoop(() => {
+  controls.update();
+  renderer.render(scene, camera);
+});
+window.__ready = true;
+</script>
