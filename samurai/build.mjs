@@ -1,7 +1,8 @@
 // Builds the rigged samurai:
 //   samurai.glb   - binary glTF: skinned mesh + skeleton + Idle/Walk/Attack/Pose_Reference clips
 //   index.html    - interactive viewer (loads samurai.glb next to it, three.js from CDN)
-//   artifact.html - the same viewer without a document skeleton (for publishing)
+//   artifact.html - the same viewer without a document skeleton (for publishing),
+//                   reading samurai.glb.b64.txt
 // Usage: npm install three@0.170.0 @gltf-transform/core@4 @gltf-transform/extensions@4 @gltf-transform/functions@4
 //        node build.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -53,7 +54,9 @@ console.log(`samurai.glb: ${(glb.byteLength / 1024).toFixed(0)} KB`);
 
 const html = readFileSync(join(here, 'viewer.template.html'), 'utf8')
   .replaceAll('__THREE__', THREE_CDN);
-writeFileSync(join(here, 'artifact.html'), html);
+// the artifact host does not serve .glb, so the published page reads a base64 copy
+writeFileSync(join(here, 'artifact.html'), html.replace('__GLB_URL__', 'samurai.glb.b64.txt'));
+writeFileSync(join(here, 'samurai.glb.b64.txt'), glb.toString('base64'));
 writeFileSync(join(here, process.env.OUT ?? 'index.html'),
-  `<!doctype html>\n<html lang="zh-Hant">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<style>body{margin:0}</style>\n</head>\n<body>\n${html}\n</body>\n</html>\n`);
+  `<!doctype html>\n<html lang="zh-Hant">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<style>body{margin:0}</style>\n</head>\n<body>\n${html.replace('__GLB_URL__', 'samurai.glb')}\n</body>\n</html>\n`);
 console.log(`viewer written (three from ${THREE_CDN})`);

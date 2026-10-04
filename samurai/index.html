@@ -154,9 +154,19 @@ function setView(name) {
 }
 setView('ref');
 
-// samurai.glb sits next to this page (about 11 MB)
-fetch('samurai.glb')
-  .then((r) => { if (!r.ok) throw new Error(`samurai.glb 讀取失敗（${r.status}）`); return r.arrayBuffer(); })
+// the model sits next to this page: samurai.glb, or a base64 .txt copy where .glb is not served
+const GLB_URL = 'samurai.glb';
+function b64ToBuffer(text) {
+  const bin = atob(text.trim());
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+fetch(GLB_URL)
+  .then((r) => {
+    if (!r.ok) throw new Error(`模型讀取失敗（${r.status}）`);
+    return GLB_URL.endsWith('.txt') ? r.text().then(b64ToBuffer) : r.arrayBuffer();
+  })
   .then((buf) => new GLTFLoader().parse(buf, '', start, (e) => fail(e.message || String(e))))
   .catch((e) => fail(location.protocol === 'file:' ? '請用網頁伺服器開啟（例如 npx serve），瀏覽器不允許從本機檔案讀取模型。' : e.message));
 function start(gltf) {
