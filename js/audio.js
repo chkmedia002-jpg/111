@@ -15,6 +15,13 @@ function audioInit() {
     const d = buf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     Audio2.noise = buf;
+    // 解碼錄音語音
+    Audio2.clips = {};
+    for (const k in (typeof VOICE_DATA !== 'undefined' ? VOICE_DATA : {})) {
+      const bin = atob(VOICE_DATA[k]), arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      Audio2.ctx.decodeAudioData(arr.buffer, b => { Audio2.clips[k] = b; }, () => {});
+    }
   } catch (e) { Audio2.ctx = null; }
 }
 
@@ -84,17 +91,31 @@ function sfx(name, x, y) {
 
 // 語音播報 + 畫面訊息
 let _evaVoice = null, _evaLast = {};
-// say:改用英語語音播報(畫面訊息仍為中文)
+// 播放錄音語音(VOICE_DATA 內的代號),成功回傳 true
+function playClip(name) {
+  const b = Audio2.ctx && Audio2.clips && Audio2.clips[name];
+  if (!b) return false;
+  const src = Audio2.ctx.createBufferSource(), g = Audio2.ctx.createGain();
+  src.buffer = b; g.gain.value = 1.6;
+  src.connect(g); g.connect(Audio2.master); src.start();
+  return true;
+}
+const CLIP_TEXT = { unit_ready: 'Unit ready' };
+
+// say:錄音語音代號(畫面訊息仍為中文);錄音不可用時改以英語合成語音唸出
 let _evaVoiceEn = null;
 function eva(text, speak = true, say = null) {
   text = eraText(text);
   UI.message(text);
-  if (!speak || !Audio2.on || !Audio2.voice || !('speechSynthesis' in window)) return;
+  if (!speak || !Audio2.on || !Audio2.voice || (!say && !('speechSynthesis' in window))) return;
   const now = performance.now();
   if (_evaLast[text] && now - _evaLast[text] < 4000) return;
   _evaLast[text] = now;
   try {
     if (say) {
+      if ('speechSynthesis' in window) speechSynthesis.cancel();
+      if (playClip(say)) return;
+      say = CLIP_TEXT[say] || say;
       if (!_evaVoiceEn) _evaVoiceEn = speechSynthesis.getVoices().find(v => /^en[-_]US/i.test(v.lang)) || speechSynthesis.getVoices().find(v => /^en/i.test(v.lang)) || null;
       const u = new SpeechSynthesisUtterance(say);
       u.lang = 'en-US'; if (_evaVoiceEn) u.voice = _evaVoiceEn;
