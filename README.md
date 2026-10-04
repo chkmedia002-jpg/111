@@ -75,4 +75,6 @@ js/main.js      主迴圈
 2. 執行 `python3 tools/pack_sprites.py`(需要 Pillow):自動去背、裁切、找腳底位置、縮放,產生 `js/sprites_data.js`
 3. 執行 `python3 build.py` 重新產生單一 HTML
 
+動畫畫格命名為 `代號_狀態_01.png`、`代號_狀態_02.png`…(狀態:`idle` 待命、`walk` 步行、`attack` 攻擊、`death` 死亡),或一張橫向排列的精靈圖表 `代號_狀態.png`。步行依移動距離換格,攻擊依攻擊節奏換格。
+
 有美術圖的單位會改用圖片顯示(含走路彈跳、攻擊前衝、自動左右翻轉),沒有圖的單位維持程式繪製。

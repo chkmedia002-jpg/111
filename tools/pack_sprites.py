@@ -3,7 +3,11 @@
 - 自動去背(透明背景直接使用;純綠 #00FF00 或純白背景會被去除)
 - 裁切到主體範圍,找出腳底(底部像素的中心)當作錨點
 - 依類型縮放,輸出 js/sprites_data.js(base64 內嵌,單一 HTML 也能用)
+- 動畫:`代號_狀態_01.png`、`代號_狀態_02.png`…(狀態:idle / walk / attack / death)
+  或一張橫向排列的精靈圖表 `代號_狀態.png`(格子之間留透明空隙,會自動切開)。
+  同一組畫格使用共同的裁切框,保留原圖的相對位置,避免播放時抖動。
 """
+import re
 import base64, io, json, os, sys
 from PIL import Image
 
@@ -71,14 +75,93 @@ def process(path, code):
             'w': round(lw, 2), 'h': round(lh, 2), 'ax': round(ax * H / h, 2), 'ay': round(lh, 2)}, len(buf.getvalue())
 
 
+STATES = ('idle', 'walk', 'attack', 'death')
+FPS = {'idle': 2, 'walk': 0, 'attack': 0, 'death': 4}   # walk 依移動距離換格,attack 依攻擊冷卻換格
+
+
+def split_sheet(im):
+    """把橫向精靈圖表依透明的直欄空隙切成多格"""
+    a = im.getchannel('A').point(lambda v: 255 if v > 24 else 0)
+    w, h = im.size
+    col = [a.crop((x, 0, x + 1, h)).getbbox() is not None for x in range(w)]
+    frames, start = [], None
+    for x, filled in enumerate(col + [False]):
+        if filled and start is None:
+            start = x
+        elif not filled and start is not None:
+            if x - start > w * 0.04:
+                frames.append(im.crop((start, 0, x, h)))
+            start = None
+    return frames
+
+
+def encode(im, scale):
+    out = im.resize((max(1, round(im.width * scale)), max(1, round(im.height * scale))), Image.LANCZOS)
+    buf = io.BytesIO()
+    out.save(buf, 'WEBP', quality=88, method=6)
+    return 'data:image/webp;base64,' + base64.b64encode(buf.getvalue()).decode(), len(buf.getvalue())
+
+
+def process_anim(code, state, frames):
+    frames = [remove_bg(f) for f in frames]
+    # 若畫格尺寸不同(來自精靈圖表),先置中到同樣大小的畫布,底部對齊
+    W = max(f.width for f in frames); H0 = max(f.height for f in frames)
+    if any(f.size != (W, H0) for f in frames):
+        canv = []
+        for f in frames:
+            c = Image.new('RGBA', (W, H0)); fb = f.getchannel('A').getbbox() or (0, 0, f.width, f.height)
+            c.paste(f, ((W - f.width) // 2, H0 - fb[3]), f); canv.append(c)
+        frames = canv
+    boxes = [f.getchannel('A').point(lambda a: 255 if a > 24 else 0).getbbox() for f in frames]
+    box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+    frames = [f.crop(box) for f in frames]
+    w, h = frames[0].size
+    # 錨點:各格腳底中心的平均
+    axs = []
+    for f in frames:
+        a = f.getchannel('A').load()
+        xs = [x for y in range(int(h * 0.94), h) for x in range(w) if a[x, y] > 128]
+        if xs: axs.append(sum(xs) / len(xs))
+    ax = sum(axs) / len(axs) if axs else w / 2
+    kind = code.split('_', 1)[1] if '_' in code else code
+    Hl = OVERRIDE.get(code, HEIGHT.get(kind, 22))
+    scale = Hl * PIXELS_PER_UNIT / h
+    srcs, total = [], 0
+    for f in frames:
+        src, n = encode(f, scale); srcs.append(src); total += n
+    return {'frames': srcs, 'fps': FPS[state], 'w': round(w * Hl / h, 2), 'h': Hl, 'ax': round(ax * Hl / h, 2), 'ay': Hl}, total
+
+
 def main():
-    data = {}
+    data, anims = {}, {}
+    pat = re.compile(r'^(.+?)_(' + '|'.join(STATES) + r')(?:_(\d+))?$')
     for f in sorted(os.listdir(SRC)):
-        code, ext = os.path.splitext(f)
+        name, ext = os.path.splitext(f)
         if ext.lower() not in ('.png', '.webp', '.jpg', '.jpeg'):
             continue
-        data[code], size = process(os.path.join(SRC, f), code)
-        print(f'{code}: {data[code]["w"]}x{data[code]["h"]} 邏輯像素, {size // 1024} KB')
+        m = pat.match(name)
+        if m:
+            code, state, idx = m.group(1), m.group(2), m.group(3)
+            im = Image.open(os.path.join(SRC, f))
+            lst = anims.setdefault(code, {}).setdefault(state, [])
+            if idx is None:
+                lst.extend((0, i, fr) for i, fr in enumerate(split_sheet(remove_bg(im))))
+            else:
+                lst.append((int(idx), 0, im))
+            continue
+        data[name], size = process(os.path.join(SRC, f), name)
+        print(f'{name}: {data[name]["w"]}x{data[name]["h"]} 邏輯像素, {size // 1024} KB')
+    for code, states in anims.items():
+        entry = data.setdefault(code, {})
+        entry.setdefault('anims', {})
+        for state, lst in states.items():
+            lst.sort(key=lambda t: (t[0], t[1]))
+            a, size = process_anim(code, state, [t[2] for t in lst])
+            entry['anims'][state] = a
+            print(f'{code} {state}: {len(lst)} 格, {size // 1024} KB')
+        if 'src' not in entry:   # 沒有靜態圖時,用第一格當作靜態圖
+            first = entry['anims'].get('idle') or next(iter(entry['anims'].values()))
+            entry.update({'src': first['frames'][0], 'w': first['w'], 'h': first['h'], 'ax': first['ax'], 'ay': first['ay']})
     with open(OUT, 'w', encoding='utf-8') as fp:
         fp.write("'use strict';\n// 由 tools/pack_sprites.py 產生,請勿手動修改\n")
         fp.write('const SPRITE_DATA = ' + json.dumps(data, ensure_ascii=False, indent=1) + ';\n')
