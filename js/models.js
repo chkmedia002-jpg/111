@@ -434,6 +434,8 @@ function drawSoldier(ctx, u, col) {
 
 // ---------- 單位入口 ----------
 function drawUnit(ctx, u) {
+  const sp = spriteFor(u);
+  if (sp) { drawSpriteUnit(ctx, u, sp); return; }
   const lk = u.def.look, col = G.players[u.owner].color;
   if (FACTIONS[G.players[u.owner].faction].era === 'ming') { drawUnitMing(ctx, u, col); return; }
   if (lk.kind === 'inf') { drawSoldier(ctx, u, col); return; }

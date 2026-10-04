@@ -68,3 +68,10 @@ js/main.js      主迴圈
 
 - 新武器類型:近戰(長槍克制騎兵)、弓箭、火繩槍(會冒煙)、實心砲彈、華車一次齊射多支神機箭、焙烙火罐(落地起火)
 - 各國建築風格不同:明朝城樓與紅牆、日本天守閣與白壁、朝鮮丹青彩繪屋簷
+
+## 美術圖素材
+1. 依照 `docs/ART_PROMPTS.md` 用生圖 AI 製作圖片,存成 `art/src/單位代號.png`(或 .webp),例如 `art/src/jp_inf2.webp`
+2. 執行 `python3 tools/pack_sprites.py`(需要 Pillow):自動去背、裁切、找腳底位置、縮放,產生 `js/sprites_data.js`
+3. 執行 `python3 build.py` 重新產生單一 HTML
+
+有美術圖的單位會改用圖片顯示(含走路彈跳、攻擊前衝、自動左右翻轉),沒有圖的單位維持程式繪製。
