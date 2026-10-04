@@ -17,7 +17,13 @@ OUT = os.path.join(ROOT, 'js', 'sprites_data.js')
 
 # 遊戲中的顯示高度(邏輯像素,從圖的最高點到腳底)。可在檔名對應的條目調整。
 HEIGHT = {'inf': 21, 'inf2': 22, 'light': 30, 'tank': 26, 'art': 28, 'harvester': 24, 'engineer': 19}
-OVERRIDE = {}          # 例:{'jp_inf2': 24}
+OVERRIDE = {'ming_harvester': 22}   # 例:{'jp_inf2': 24}
+# 載具:原圖座標(像素)標出地面中心錨點、車輪(圓心x, 圓心y, 半徑)、車斗(中心, 半長向量, 半寬向量)。
+# 車輪由遊戲程式繪製並依移動距離旋轉;車斗位置用來疊上貨物。
+VEHICLE = {
+    'ming_harvester': {'anchor': (766, 646), 'wheels': [(400, 490, 75)],
+                       'bed': (505, 352, (118, 66), (62, -31)), 'axis': (0.864, 0.503)},
+}
 # 沒有靜態圖時,指定用哪一格當站立(待命)姿勢:(狀態, 第幾格,從 1 開始)
 STAND_FRAME = {'jp_inf2': ('walk', 3)}
 PIXELS_PER_UNIT = 12   # 最大縮放時每個邏輯像素對應的圖片像素
@@ -86,12 +92,24 @@ def process(path, code):
     kind = code.split('_', 1)[1] if '_' in code else code
     H = OVERRIDE.get(code, HEIGHT.get(kind, 22))
     scale = H * PIXELS_PER_UNIT / h
+    veh = VEHICLE.get(code)
+    if veh:
+        k = H / h
+        ox, oy = veh['anchor'][0] - bbox[0], veh['anchor'][1] - bbox[1]
+        L = lambda x, y: [round((x - bbox[0] - ox) * k, 2), round((y - bbox[1] - oy) * k, 2)]
+        bx, by, (hx, hy), (wx, wy) = veh['bed']
+        extra = {'veh': True, 'axis': list(veh['axis']),
+                 'wheels': [L(x, y) + [round(r * k, 2)] for x, y, r in veh['wheels']],
+                 'bed': L(bx, by) + [round(hx * k, 2), round(hy * k, 2), round(wx * k, 2), round(wy * k, 2)]}
     out = im.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
     buf = io.BytesIO()
     out.save(buf, 'WEBP', quality=88, method=6)
     lw, lh = w * H / h, H
-    return {'src': 'data:image/webp;base64,' + base64.b64encode(buf.getvalue()).decode(),
-            'w': round(lw, 2), 'h': round(lh, 2), 'ax': round(ax * H / h, 2), 'ay': round(lh, 2)}, len(buf.getvalue())
+    d = {'src': 'data:image/webp;base64,' + base64.b64encode(buf.getvalue()).decode(),
+         'w': round(lw, 2), 'h': round(lh, 2), 'ax': round(ax * H / h, 2), 'ay': round(lh, 2)}
+    if veh:
+        d.update(extra, ax=round(ox * H / h, 2), ay=round(oy * H / h, 2))
+    return d, len(buf.getvalue())
 
 
 STATES = ('idle', 'walk', 'attack', 'death')

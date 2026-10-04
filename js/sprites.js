@@ -10,7 +10,8 @@ for (const [k, d] of Object.entries(typeof SPRITE_DATA !== 'undefined' ? SPRITE_
     an.imgs = a.frames.map(src => _loadImg(src, () => { an.loaded++; }));
   }
 }
-function spriteFor(u) { const s = SPRITES[u.type]; return s && s.ok ? s : null; }
+// 時代專屬圖優先(如 ming_harvester),再找單位代號
+function spriteFor(u) { const s = SPRITES[G.era + '_' + u.type] || SPRITES[u.type]; return s && s.ok ? s : null; }
 function animReady(s, state) { const a = s.anims[state]; return a && a.loaded === a.imgs.length ? a : null; }
 
 // 原圖面向右下;面向左邊時水平翻轉。
@@ -31,12 +32,14 @@ function drawSpriteUnit(ctx, u, s) {
   else if (idleA) { pic = idleA; img = idleA.imgs[Math.floor((G.time + (u.id || 0) * 0.37) * idleA.fps) % idleA.imgs.length]; framed = true; }
   // 程式動作:有逐格動畫時減弱,避免動作過度
   const ph = (u.anim || 0) * 2;
-  const bob = u.moving ? Math.abs(Math.sin(ph)) * (walkA ? 0.35 : 1.3) : framed ? 0 : Math.sin(G.time * 2 + (u.id || 0)) * 0.15;
-  const sway = u.moving && !walkA ? Math.sin(ph) * 0.07 : 0;
+  const bob = s.veh ? (u.moving ? Math.abs(Math.sin(ph)) * 0.3 : 0)
+    : u.moving ? Math.abs(Math.sin(ph)) * (walkA ? 0.35 : 1.3) : framed ? 0 : Math.sin(G.time * 2 + (u.id || 0)) * 0.15;
+  const sway = u.moving && !walkA && !s.veh ? Math.sin(ph) * 0.07 : 0;
   const lunge = atk > 0 ? Math.sin(atk * Math.PI) * (atkA ? 1 : 2.4) : 0;
   const tilt = atk > 0 && !atkA ? Math.sin(atk * Math.PI) * 0.14 : 0;
   // 陰影與陣營色光圈
-  softShadow(ctx, u.x, u.y, s.w * 0.42, s.w * 0.17, 0.5);
+  if (s.veh) softShadow(ctx, u.x, u.y, s.w * 0.5, s.w * 0.2, 0.45);
+  else softShadow(ctx, u.x, u.y, s.w * 0.42, s.w * 0.17, 0.5);
   const col = G.players[u.owner] ? G.players[u.owner].color : '#fff';
   pushA(ctx, 0.75);
   ctx.strokeStyle = col; ctx.lineWidth = 0.7;
@@ -48,12 +51,92 @@ function drawSpriteUnit(ctx, u, s) {
   if (flip) ctx.scale(-1, 1);
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(img, -pic.ax, -pic.ay, pic.w, pic.h);
+  if (s.veh) drawVehicleParts(ctx, u, s);
   if (G.time - (u.hitT || -99) < 0.08) {
     ctx.globalCompositeOperation = 'lighter'; pushA(ctx, 0.35);
     ctx.drawImage(img, -pic.ax, -pic.ay, pic.w, pic.h);
     popA(ctx); ctx.globalCompositeOperation = 'source-over';
   }
   ctx.restore();
+}
+
+// ===== 載具零件:車斗貨物 + 依移動距離滾動的車輪(座標以錨點為原點,已含翻轉)=====
+function drawVehicleParts(ctx, u, s) {
+  if (s.bed) drawBedCargo(ctx, u, s.bed);
+  const [ax, ay] = s.axis;
+  for (const [wx, wy, r] of s.wheels || []) {
+    // anim 每走一格 +6,一格沿車軸約 22 邏輯像素 → 轉角 = 距離 / 半徑
+    const rot = (u.anim || 0) / 6 * 22.4 / r;
+    ctx.save();
+    ctx.translate(wx, wy);
+    ctx.transform(ax, ay, 0, 1, 0, 0);     // 車輪立在車軸與垂直方向構成的平面上
+    // 輪框
+    ctx.lineWidth = r * 0.24; ctx.strokeStyle = '#3e2a18';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.88, 0, 6.2832); ctx.stroke();
+    ctx.lineWidth = r * 0.1; ctx.strokeStyle = '#8a6440';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.84, 3.6, 5.6); ctx.stroke();
+    // 輻條
+    ctx.lineWidth = r * 0.11; ctx.strokeStyle = '#6a4a2c'; ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let k = 0; k < 8; k++) { const a = rot + k * Math.PI / 4; ctx.moveTo(Math.cos(a) * r * 0.2, Math.sin(a) * r * 0.2); ctx.lineTo(Math.cos(a) * r * 0.78, Math.sin(a) * r * 0.78); }
+    ctx.stroke(); ctx.lineCap = 'butt';
+    // 輪轂
+    ctx.fillStyle = '#4a3420'; ctx.beginPath(); ctx.arc(0, 0, r * 0.26, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = '#a07a50'; ctx.beginPath(); ctx.arc(-r * 0.05, -r * 0.05, r * 0.12, 0, 6.2832); ctx.fill();
+    ctx.restore();
+  }
+}
+
+// 車斗貨物:木材、石材、銀礦,依裝載量增加
+function drawBedCargo(ctx, u, bed) {
+  const fill = clamp((u.cargo || 0) / HARV_CAP, 0, 1);
+  if (fill < 0.03) return;
+  const [cx, cy, hx, hy, wx, wy] = bed;
+  const at = (a, b, z) => [cx + hx * a + wx * b, cy + hy * a + wy * b - z];   // a、b ∈ [-1,1]:沿車長、車寬
+  if (u.cargoKind === 'wood') {
+    const n = 1 + Math.round(fill * 5);
+    for (let k = 0; k < n; k++) {
+      const row = k % 3, lay = Math.floor(k / 3);
+      const b = -0.6 + row * 0.6, z = 0.6 + lay * 0.9;
+      const p0 = at(-0.95, b, z), p1 = at(0.85, b, z);
+      ctx.lineCap = 'round';
+      line(ctx, p0, p1, '#5e4026', 1.5); line(ctx, [p0[0], p0[1] - 0.4], [p1[0], p1[1] - 0.4], '#94704a', 0.45);
+      ctx.lineCap = 'butt';
+      ell(ctx, p1[0], p1[1], 0.72, 0.72, '#d6ae78'); ell(ctx, p1[0], p1[1], 0.28, 0.28, '#9a7246');
+    }
+  } else if (u.cargoKind === 'stone') {
+    // 石塊:兩排堆疊
+    const n = 2 + Math.round(fill * 5);
+    for (let k = 0; k < n; k++) {
+      const lay = Math.floor(k / 4), i = k % 4;
+      const [px, py] = at(-0.75 + i * 0.5, lay ? 0 : (i % 2 ? 0.45 : -0.45), 0.9 + lay * 1.1);
+      const r = 1.25 + hash(u.id * 7 + k) * 0.45;
+      ell(ctx, px + 0.2, py + r * 0.45, r * 0.95, r * 0.35, 'rgba(0,0,0,0.3)');
+      poly(ctx, [[px - r, py + r * 0.1], [px - r * 0.5, py - r * 0.8], [px + r * 0.7, py - r * 0.75], [px + r, py + r * 0.2], [px + r * 0.1, py + r * 0.6]], k % 2 ? '#86817a' : '#9c978d');
+      poly(ctx, [[px - r * 0.5, py - r * 0.8], [px + r * 0.7, py - r * 0.75], [px + r * 0.15, py - r * 0.15], [px - r * 0.6, py - r * 0.1]], '#c4bfb4');
+    }
+  } else {
+    // 銀礦:帶銀脈的礦石,裝得多時頂上放銀錠
+    const n = 2 + Math.round(fill * 4);
+    for (let k = 0; k < n; k++) {
+      const lay = Math.floor(k / 4), i = k % 4;
+      const [px, py] = at(-0.7 + i * 0.47, lay ? 0 : (i % 2 ? 0.4 : -0.4), 0.9 + lay * 1);
+      const r = 1.15 + hash(u.id * 5 + k) * 0.4;
+      ell(ctx, px + 0.2, py + r * 0.45, r, r * 0.35, 'rgba(0,0,0,0.3)');
+      poly(ctx, [[px - r, py], [px - r * 0.6, py - r * 0.9], [px + r * 0.3, py - r], [px + r, py - r * 0.3], [px + r * 0.7, py + r * 0.35], [px - r * 0.3, py + r * 0.4]], '#55585e');
+      poly(ctx, [[px - r * 0.6, py - r * 0.9], [px + r * 0.3, py - r], [px + r * 0.2, py - r * 0.3], [px - r * 0.5, py - r * 0.25]], '#71757b');
+      line(ctx, [px - r * 0.7, py - r * 0.2], [px - r * 0.1, py - r * 0.55], '#e8ecf2', 0.3);
+      line(ctx, [px - r * 0.1, py - r * 0.55], [px + r * 0.6, py - r * 0.35], '#e8ecf2', 0.3);
+    }
+    if (fill > 0.5) {
+      // 銀錠(元寶)
+      const [px, py] = at(0, 0, 2.3);
+      ctx.fillStyle = '#9aa2ac';
+      ctx.beginPath(); ctx.moveTo(px - 1.6, py - 1); ctx.quadraticCurveTo(px - 1, py + 0.4, px, py + 0.4); ctx.quadraticCurveTo(px + 1, py + 0.4, px + 1.6, py - 1);
+      ctx.quadraticCurveTo(px, py - 0.4, px - 1.6, py - 1); ctx.fill();
+      ell(ctx, px, py - 0.85, 0.6, 0.35, '#e4e8ee'); circ(ctx, px - 0.9, py - 1.1, 0.25, '#ffffff');
+    }
+  }
 }
 
 // ===== 建築美術圖 =====
