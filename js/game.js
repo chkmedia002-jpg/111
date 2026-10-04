@@ -122,7 +122,7 @@ function updateProduction(p, dt) {
       } else {
         const u = spawnUnit(p, type);
         if (!u) { p.credits += d.cost; }
-        else if (p.id === G.human) { eva('單位就緒'); sfx('ready'); }
+        else if (p.id === G.human) { eva('單位就緒', true, 'Unit ready'); sfx('ready'); }
       }
     }
   }

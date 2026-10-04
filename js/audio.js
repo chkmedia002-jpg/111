@@ -84,7 +84,9 @@ function sfx(name, x, y) {
 
 // 語音播報 + 畫面訊息
 let _evaVoice = null, _evaLast = {};
-function eva(text, speak = true) {
+// say:改用英語語音播報(畫面訊息仍為中文)
+let _evaVoiceEn = null;
+function eva(text, speak = true, say = null) {
   text = eraText(text);
   UI.message(text);
   if (!speak || !Audio2.on || !Audio2.voice || !('speechSynthesis' in window)) return;
@@ -92,6 +94,15 @@ function eva(text, speak = true) {
   if (_evaLast[text] && now - _evaLast[text] < 4000) return;
   _evaLast[text] = now;
   try {
+    if (say) {
+      if (!_evaVoiceEn) _evaVoiceEn = speechSynthesis.getVoices().find(v => /^en[-_]US/i.test(v.lang)) || speechSynthesis.getVoices().find(v => /^en/i.test(v.lang)) || null;
+      const u = new SpeechSynthesisUtterance(say);
+      u.lang = 'en-US'; if (_evaVoiceEn) u.voice = _evaVoiceEn;
+      u.rate = 1.0; u.pitch = 0.8; u.volume = 0.8;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(u);
+      return;
+    }
     if (!_evaVoice) {
       const vs = speechSynthesis.getVoices();
       _evaVoice = vs.find(v => /zh[-_]TW/i.test(v.lang)) || vs.find(v => /zh/i.test(v.lang)) || null;
