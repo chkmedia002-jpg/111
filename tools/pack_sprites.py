@@ -56,6 +56,23 @@ def remove_bg(im):
     return im
 
 
+BLD_KINDS = {'conyard', 'power', 'refinery', 'barracks', 'factory', 'tech', 'turret', 'super'}
+BLD_WIDTH = 800        # 建築圖輸出寬度(像素)
+
+
+def is_building(code):
+    return '_' in code and code.split('_', 1)[1] in BLD_KINDS
+
+
+def process_building(path, code):
+    """建築:裁切後整張寬度對齊地面菱形,底部對齊菱形前角"""
+    im = remove_bg(Image.open(path))
+    im = im.crop(im.getchannel('A').point(lambda a: 255 if a > 24 else 0).getbbox())
+    scale = BLD_WIDTH / im.width
+    src, n = encode(im, scale)
+    return {'bld': True, 'src': src, 'iw': im.width, 'ih': im.height}, n
+
+
 def process(path, code):
     im = remove_bg(Image.open(path))
     bbox = im.getchannel('A').point(lambda a: 255 if a > 24 else 0).getbbox()
@@ -150,6 +167,10 @@ def main():
                 lst.extend((0, i, fr) for i, fr in enumerate(split_sheet(remove_bg(im))))
             else:
                 lst.append((int(idx), 0, im))
+            continue
+        if is_building(name):
+            data[name], size = process_building(os.path.join(SRC, f), name)
+            print(f'{name}: 建築, {size // 1024} KB')
             continue
         data[name], size = process(os.path.join(SRC, f), name)
         print(f'{name}: {data[name]["w"]}x{data[name]["h"]} 邏輯像素, {size // 1024} KB')

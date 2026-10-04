@@ -347,7 +347,7 @@ function drawFog(ctx) {
 
 // ===== 生命條與選取框 =====
 function entTop(e) {
-  if (e.kind === 'bld') { const [tx, ty] = P(e.tx + e.w / 2, e.ty, 0); return [tx, ty - 34]; }
+  if (e.kind === 'bld') { const [tx, ty] = P(e.tx + e.w / 2, e.ty, 0); return [tx, e._sprTop !== undefined ? Math.min(ty - 34, e._sprTop - 4) : ty - 34]; }
   const sp = spriteFor(e);
   if (sp) return P(e.x, e.y, sp.h + 2);
   const z = e.def.cat === 'inf' ? 17 : (e.def.look.H || 5) + 13;

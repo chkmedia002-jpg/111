@@ -55,3 +55,30 @@ function drawSpriteUnit(ctx, u, s) {
   }
   ctx.restore();
 }
+
+// ===== 建築美術圖 =====
+// 素材代號:陣營專屬建築用原代號(如 jp_turret),共用建築用「陣營_類型」(如 jp_barracks)
+function buildingSprite(b) {
+  const f = G.players[b.owner] && G.players[b.owner].faction;
+  const s = SPRITES[b.type.includes('_') ? b.type : f + '_' + b.type];
+  return s && s.ok && s.bld ? s : null;
+}
+// 圖片寬度對齊地面菱形寬度,底部對齊菱形前角;施工時由下往上長出
+function drawBuildingSprite(ctx, b, s) {
+  const west = P(b.tx, b.ty + b.h, 0), east = P(b.tx + b.w, b.ty, 0), front = P(b.tx + b.w, b.ty + b.h, 0);
+  const dw = (east[0] - west[0]) * (s.fit || 1.04), k = dw / s.iw, dh = s.ih * k;
+  const x = (west[0] + east[0]) / 2 - dw / 2, y = front[1] - dh + 1;
+  const prog = b.prog < 1 && !b.ghost ? b.prog : 1;
+  pushA(ctx, 0.3);
+  poly(ctx, [P(b.tx - 0.1, b.ty - 0.1), P(b.tx + b.w + 0.15, b.ty - 0.1), P(b.tx + b.w + 0.15, b.ty + b.h + 0.15), P(b.tx - 0.1, b.ty + b.h + 0.15)], '#000');
+  popA(ctx);
+  ctx.imageSmoothingEnabled = true;
+  const sh = s.img.naturalHeight * prog;
+  ctx.drawImage(s.img, 0, s.img.naturalHeight - sh, s.img.naturalWidth, sh, x, y + dh * (1 - prog), dw, dh * prog);
+  if (G.time - (b.hitT || -99) < 0.08) {
+    ctx.globalCompositeOperation = 'lighter'; pushA(ctx, 0.25);
+    ctx.drawImage(s.img, 0, s.img.naturalHeight - sh, s.img.naturalWidth, sh, x, y + dh * (1 - prog), dw, dh * prog);
+    popA(ctx); ctx.globalCompositeOperation = 'source-over';
+  }
+  b._sprTop = y;
+}

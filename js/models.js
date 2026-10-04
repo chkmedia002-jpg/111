@@ -539,7 +539,9 @@ function drawBuilding(ctx, b) {
   R.zs = b.prog < 1 ? b.prog : 1;
   const t = G.time + b.anim, seed = b.id * 7 + b.tx * 3 + b.ty;
   const conc = '#8e949b', p = G.players[b.owner], powered = !p.lowPower;
-  if (FACTIONS[p.faction].era === 'ming') drawBuildingMing(ctx, b, col, t, seed, powered);
+  const bsp = buildingSprite(b);
+  if (bsp) drawBuildingSprite(ctx, b, bsp);
+  else if (FACTIONS[p.faction].era === 'ming') drawBuildingMing(ctx, b, col, t, seed, powered);
   else switch (b.type) {
     case 'conyard': {
       slab(ctx, b, 2.4, '#767c83');
