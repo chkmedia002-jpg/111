@@ -12,7 +12,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { buildSamurai } from './src/samurai.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const THREE_CDN = process.env.THREE_BASE ?? 'https://cdn.jsdelivr.net/npm/three@0.170.0';
+const THREE_CDN = process.env.THREE_BASE ?? 'https://cdn.jsdelivr.net/npm/three@0.147.0';
 
 // GLTFExporter reads Blobs through FileReader, which Node lacks.
 globalThis.FileReader ??= class {

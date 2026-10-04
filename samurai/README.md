@@ -45,6 +45,6 @@ Hips
 ## 重新建置
 
 ```bash
-npm install three@0.170.0
+npm install three@0.170.0  # 匯出用；檢視器從 CDN 載入 three@0.147.0（傳統 script 版本，相容性較好）
 node build.mjs
 ```

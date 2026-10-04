@@ -49,11 +49,13 @@
   button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   button[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
   .controls .group { display: flex; flex-wrap: wrap; gap: 8px; }
+  .status { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; max-width: calc(100vw - 40px); font-size: 0.9rem; color: var(--ink-soft); text-align: center; }
   .hint { font-size: 0.75rem; color: var(--ink-soft); margin-left: auto; }
   @media (max-width: 480px) { .hint { display: none; } .label h1 { font-size: 1.35rem; } }
 </style>
 
 <div id="stage"></div>
+<p id="status" class="status" role="status">載入模型中…</p>
 <div class="label">
   <span class="sub">Rigged 3D model · o-yoroi</span>
   <h1>三日月の武者</h1>
@@ -75,14 +77,18 @@
   <span class="hint">拖曳旋轉 · 滾輪縮放 · 右鍵平移</span>
 </div>
 
-<script type="importmap">
-{ "imports": { "three": "__THREE__/build/three.module.js", "three/addons/": "__THREE__/examples/jsm/" } }
-</script>
-<script type="module">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+<script src="__THREE__/build/three.min.js"></script>
+<script src="__THREE__/examples/js/controls/OrbitControls.js"></script>
+<script src="__THREE__/examples/js/environments/RoomEnvironment.js"></script>
+<script src="__THREE__/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+(function () {
+'use strict';
+const status = document.getElementById('status');
+function fail(msg) { status.hidden = false; status.textContent = '無法顯示模型：' + msg; }
+window.addEventListener('error', (e) => fail(e.message));
+if (typeof THREE === 'undefined' || !THREE.GLTFLoader) { fail('three.js 函式庫沒有載入，請檢查網路後重新整理。'); return; }
+const { OrbitControls, RoomEnvironment, GLTFLoader } = THREE;
 
 const GLB = '__GLB_BASE64__';
 const WALK_SPEED = 0.667; // m/s, matches the Walk clip's stride
@@ -94,6 +100,8 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.physicallyCorrectLights = true;
 stage.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -139,8 +147,11 @@ function setView(name) {
 }
 setView('ref');
 
-const bytes = Uint8Array.from(atob(GLB), (c) => c.charCodeAt(0));
-const gltf = await new GLTFLoader().parseAsync(bytes.buffer, '');
+const bin = atob(GLB);
+const bytes = new Uint8Array(bin.length);
+for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+new GLTFLoader().parse(bytes.buffer, '', start, (e) => fail(e.message || String(e)));
+function start(gltf) {
 const model = gltf.scene;
 model.traverse((o) => {
   if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; }
@@ -206,4 +217,7 @@ renderer.setAnimationLoop(() => {
 });
 window.__seek = (name, t) => { mixer.stopAllAction(); const a = actions[name]; a.reset().play(); mixer.setTime(t); a.paused = true; current = a; };
 window.__ready = true;
+status.hidden = true;
+}
+})();
 </script>
