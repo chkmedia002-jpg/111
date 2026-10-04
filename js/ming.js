@@ -12,7 +12,7 @@ Object.assign(FACTIONS, {
     name: '日本', en: 'Toyotomi Japan', era: 'ming', color: '#f0ebdc', beam: '#ff7020',
     desc: '戰國百戰之師。鐵砲足輕齊射,武士近戰無雙,騎馬武者衝鋒迅猛。',
     units: ['鐵砲足輕、武士', '騎馬武者、大筒車', '焙烙投石車、火攻之陣'],
-    names: { conyard: '本丸天守', power: '米藏', refinery: '市集', barracks: '足輕長屋', factory: '鍛冶場', tech: '軍學所', engineer: '工匠', harvester: '運輸牛車' }
+    names: { conyard: '本丸天守', power: '農田', refinery: '市集', barracks: '足輕長屋', factory: '鍛冶場', tech: '軍學所', engineer: '工匠', harvester: '運輸牛車' }
   },
   kr: {
     name: '朝鮮', en: 'Joseon', era: 'ming', color: '#2f74dc', beam: '#ffb040',

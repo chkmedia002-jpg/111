@@ -132,7 +132,7 @@ function updateInfo() {
     if (e.kind === 'unit' && d.harvester) extra = `<br>載貨:${e.cargo > 0 && e.cargoKind ? CARGO_NAME[e.cargoKind] + ' ' : ''}${Math.floor(e.cargo)} / ${HARV_CAP}`;
     if (e.kind === 'unit' && e.weapon) extra = `<br>武器射程:${e.weapon.range}`;
     if (e.kind === 'unit' && !d.harvester) extra += `<br>等級:${VET[e.rank].name}`;
-    if (e.kind === 'bld' && d.power) extra = `<br>電力:${d.power > 0 ? '+' : ''}${d.power}`;
+    if (e.kind === 'bld' && d.power) extra = `<br>${ERAS[G.era] ? ERAS[G.era].power : "電力"}:${d.power > 0 ? '+' : ''}${d.power}`;
     el.innerHTML = `<b style="color:${G.players[e.owner].color}">${dname(e.type, G.players[e.owner].faction)}</b>${own ? '' : '(敵方)'}<br>生命:${Math.ceil(e.hp)} / ${e.maxHp}${extra}`;
   } else {
     const counts = {};
