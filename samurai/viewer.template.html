@@ -48,21 +48,30 @@
   button:hover { border-color: var(--gold); }
   button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   button[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+  .controls .group { display: flex; flex-wrap: wrap; gap: 8px; }
   .hint { font-size: 0.75rem; color: var(--ink-soft); margin-left: auto; }
   @media (max-width: 480px) { .hint { display: none; } .label h1 { font-size: 1.35rem; } }
 </style>
 
 <div id="stage"></div>
 <div class="label">
-  <span class="sub">Procedural 3D model · o-yoroi</span>
+  <span class="sub">Rigged 3D model · o-yoroi</span>
   <h1>三日月の武者</h1>
-  <p>黑漆大鎧、三日月前立、背負旗指物，雙手持太刀上段斜舉。</p>
+  <p>黑漆大鎧、三日月前立、背負旗指物。19 根骨骼蒙皮，內含待機、步行、攻擊與參考姿勢動畫。</p>
 </div>
 <div class="controls">
-  <button id="rotate" type="button" aria-pressed="true">自動旋轉</button>
-  <button id="front" type="button">正面</button>
-  <button id="side" type="button">側面</button>
-  <button id="ref" type="button">參考角度</button>
+  <div class="group" role="group" aria-label="動作">
+    <button type="button" data-clip="Idle">待機</button>
+    <button type="button" data-clip="Walk">步行</button>
+    <button type="button" data-clip="Attack">攻擊</button>
+    <button type="button" data-clip="Pose_Reference">參考姿勢</button>
+  </div>
+  <div class="group">
+    <button id="bones" type="button" aria-pressed="false">顯示骨架</button>
+    <button id="rotate" type="button" aria-pressed="false">自動旋轉</button>
+    <button id="front" type="button">正面</button>
+    <button id="side" type="button">側面</button>
+  </div>
   <span class="hint">拖曳旋轉 · 滾輪縮放 · 右鍵平移</span>
 </div>
 
@@ -73,8 +82,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/*BUILDER*/
+const GLB = '__GLB_BASE64__';
+const WALK_SPEED = 0.667; // m/s, matches the Walk clip's stride
 
 const stage = document.getElementById('stage');
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -91,7 +102,6 @@ scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
 const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 50);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0.15, 1.0, 0);
 controls.enableDamping = true;
 controls.minDistance = 1.2;
 controls.maxDistance = 9;
@@ -113,34 +123,63 @@ const ground = new THREE.Mesh(new THREE.CircleGeometry(4, 64), new THREE.ShadowM
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
+// floor grid scrolls under the in-place walk so the motion reads as travel
+const CELL = 0.25;
+const grid = new THREE.GridHelper(6, 6 / CELL, 0x8a8a8a, 0x8a8a8a);
+grid.material.transparent = true;
+grid.material.opacity = 0.22;
+grid.position.y = 0.001;
+scene.add(grid);
 
-const samurai = buildSamurai(THREE);
-scene.add(samurai);
-
-const views = {
-  ref: [0.35, 1.15, 4.0],
-  front: [0.15, 1.1, 4.2],
-  side: [4.2, 1.2, 0.2],
-};
+const views = { ref: [0.6, 1.25, 4.2], front: [0.0, 1.15, 4.4], side: [4.4, 1.2, 0.3] };
 function setView(name) {
   camera.position.set(...views[name]);
-  controls.target.set(0.2, 1.05, 0);
+  controls.target.set(0.05, 0.95, 0);
   controls.update();
 }
 setView('ref');
 
+const bytes = Uint8Array.from(atob(GLB), (c) => c.charCodeAt(0));
+const gltf = await new GLTFLoader().parseAsync(bytes.buffer, '');
+const model = gltf.scene;
+model.traverse((o) => {
+  if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; }
+});
+scene.add(model);
+const skeleton = new THREE.SkeletonHelper(model);
+skeleton.visible = false;
+scene.add(skeleton);
+
+const mixer = new THREE.AnimationMixer(model);
+const actions = Object.fromEntries(gltf.animations.map((c) => [c.name, mixer.clipAction(c)]));
+const attack = actions.Attack;
+attack.setLoop(THREE.LoopOnce, 1);
+attack.clampWhenFinished = true;
+
+const clipButtons = [...document.querySelectorAll('[data-clip]')];
+let current = null;
+let loopName = 'Idle'; // what Attack returns to
+function play(name) {
+  const next = actions[name];
+  if (name !== 'Attack') loopName = name;
+  next.reset().setEffectiveWeight(1).play();
+  if (current && current !== next) current.crossFadeTo(next, 0.25, false);
+  current = next;
+  for (const b of clipButtons) b.setAttribute('aria-pressed', String(b.dataset.clip === name));
+}
+mixer.addEventListener('finished', (e) => { if (e.action === attack) play(loopName); });
+for (const b of clipButtons) b.onclick = () => play(b.dataset.clip);
+play('Idle');
+
+function toggle(btn, on) { btn.setAttribute('aria-pressed', String(on)); }
+const bonesBtn = document.getElementById('bones');
+bonesBtn.onclick = () => { skeleton.visible = !skeleton.visible; toggle(bonesBtn, skeleton.visible); };
 const rotateBtn = document.getElementById('rotate');
-const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-controls.autoRotate = !reduce;
-rotateBtn.setAttribute('aria-pressed', String(controls.autoRotate));
-rotateBtn.onclick = () => {
-  controls.autoRotate = !controls.autoRotate;
-  rotateBtn.setAttribute('aria-pressed', String(controls.autoRotate));
-};
-for (const id of ['front', 'side', 'ref']) {
+rotateBtn.onclick = () => { controls.autoRotate = !controls.autoRotate; toggle(rotateBtn, controls.autoRotate); };
+for (const id of ['front', 'side']) {
   document.getElementById(id).onclick = () => {
     controls.autoRotate = false;
-    rotateBtn.setAttribute('aria-pressed', 'false');
+    toggle(rotateBtn, false);
     setView(id);
   };
 }
@@ -155,9 +194,16 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
+const clock = new THREE.Clock();
+let scroll = 0;
 renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  mixer.update(dt);
+  scroll = (scroll + dt * WALK_SPEED * actions.Walk.getEffectiveWeight() * (actions.Walk.isRunning() ? 1 : 0)) % CELL;
+  grid.position.z = -scroll;
   controls.update();
   renderer.render(scene, camera);
 });
+window.__seek = (name, t) => { mixer.stopAllAction(); const a = actions[name]; a.reset().play(); mixer.setTime(t); a.paused = true; current = a; };
 window.__ready = true;
 </script>

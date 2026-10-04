@@ -1,6 +1,7 @@
-// Builds the samurai model:
-//   samurai.glb  - binary glTF for Blender / game engines / any 3D viewer
-//   index.html   - standalone interactive viewer (three.js from CDN)
+// Builds the rigged samurai:
+//   samurai.glb   - binary glTF: skinned mesh + skeleton + Idle/Walk/Attack/Pose_Reference clips
+//   index.html    - standalone interactive viewer (GLB embedded, three.js from CDN)
+//   artifact.html - the same viewer without a document skeleton (for publishing)
 // Usage: npm install three@0.170.0 && node build.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -26,53 +27,20 @@ globalThis.FileReader ??= class {
   }
 };
 
-// Bake the scene graph into one mesh per material, grouped by body part.
-function bake(model) {
-  model.updateMatrixWorld(true);
-  const parts = new Map(); // part name -> Map(material -> geometries)
-  const partOf = (obj) => {
-    for (let o = obj; o; o = o.parent) if (o.parent === model) return o.name || 'Body';
-    return 'Body';
-  };
-  model.traverse((o) => {
-    if (!o.isMesh) return;
-    let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
-    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
-    g.applyMatrix4(o.matrixWorld);
-    const part = partOf(o);
-    if (!parts.has(part)) parts.set(part, new Map());
-    const byMat = parts.get(part);
-    if (!byMat.has(o.material)) byMat.set(o.material, []);
-    byMat.get(o.material).push(g);
-  });
-  const out = new THREE.Group();
-  out.name = 'Samurai';
-  let tris = 0;
-  for (const [part, byMat] of parts) {
-    const pg = new THREE.Group();
-    pg.name = part;
-    for (const [mat, geos] of byMat) {
-      const merged = mergeVertices(mergeGeometries(geos), 1e-5);
-      tris += merged.index.count / 3;
-      const mesh = new THREE.Mesh(merged, mat);
-      mesh.name = `${part}_${mat.name}`;
-      pg.add(mesh);
-    }
-    out.add(pg);
-  }
-  return { out, tris };
+const { model, clips, report } = buildSamurai(THREE, { mergeGeometries, mergeVertices });
+const mesh = model.getObjectByName('SamuraiMesh');
+console.log(`bones: ${mesh.skeleton.bones.length}, triangles: ${mesh.geometry.index.count / 3}`);
+for (const [name, err] of Object.entries(report)) {
+  console.log(`clip ${name}: max IK reach error ${(err * 1000).toFixed(1)} mm`);
 }
 
-const { out, tris } = bake(buildSamurai(THREE));
-const glb = await new GLTFExporter().parseAsync(out, { binary: true });
-writeFileSync(join(here, 'samurai.glb'), Buffer.from(glb));
-console.log(`samurai.glb: ${(glb.byteLength / 1024).toFixed(0)} KB, ${tris} triangles`);
+const glb = Buffer.from(await new GLTFExporter().parseAsync(model, { binary: true, animations: clips }));
+writeFileSync(join(here, 'samurai.glb'), glb);
+console.log(`samurai.glb: ${(glb.byteLength / 1024).toFixed(0)} KB`);
 
-const builder = readFileSync(join(here, 'src/samurai.js'), 'utf8').replace(/^export /m, '');
 const html = readFileSync(join(here, 'viewer.template.html'), 'utf8')
   .replaceAll('__THREE__', THREE_CDN)
-  .replace('/*BUILDER*/', () => builder);
-// artifact.html has no document skeleton (the publisher adds one); index.html is a standalone page.
+  .replace('__GLB_BASE64__', () => glb.toString('base64'));
 writeFileSync(join(here, 'artifact.html'), html);
 writeFileSync(join(here, process.env.OUT ?? 'index.html'),
   `<!doctype html>\n<html lang="zh-Hant">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<style>body{margin:0}</style>\n</head>\n<body>\n${html}\n</body>\n</html>\n`);
