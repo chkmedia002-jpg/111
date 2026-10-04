@@ -896,7 +896,10 @@ function playClip(name) {
   if (!b) return false;
   const src = Audio2.ctx.createBufferSource(), g = Audio2.ctx.createGain();
   src.buffer = b; g.gain.value = 1.6;
-  src.connect(g); g.connect(Audio2.master); src.start();
+  src.connect(g); g.connect(Audio2.master);
+  // 同時完成多個單位時,停掉前一次避免疊音
+  if (Audio2.clipSrc) try { Audio2.clipSrc.stop(); } catch (e) {}
+  Audio2.clipSrc = src; src.start();
   return true;
 }
 const CLIP_TEXT = { unit_ready: 'Unit ready' };
@@ -908,7 +911,8 @@ function eva(text, speak = true, say = null) {
   UI.message(text);
   if (!speak || !Audio2.on || !Audio2.voice || (!say && !('speechSynthesis' in window))) return;
   const now = performance.now();
-  if (_evaLast[text] && now - _evaLast[text] < 4000) return;
+  // 錄音播報(如 Unit ready)每次都播;其他語音 4 秒內不重複
+  if (!say && _evaLast[text] && now - _evaLast[text] < 4000) return;
   _evaLast[text] = now;
   try {
     if (say) {
