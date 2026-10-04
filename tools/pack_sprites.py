@@ -18,6 +18,8 @@ OUT = os.path.join(ROOT, 'js', 'sprites_data.js')
 # 遊戲中的顯示高度(邏輯像素,從圖的最高點到腳底)。可在檔名對應的條目調整。
 HEIGHT = {'inf': 21, 'inf2': 22, 'light': 30, 'tank': 26, 'art': 28, 'harvester': 24, 'engineer': 19}
 OVERRIDE = {}          # 例:{'jp_inf2': 24}
+# 沒有靜態圖時,指定用哪一格當站立(待命)姿勢:(狀態, 第幾格,從 1 開始)
+STAND_FRAME = {'jp_inf2': ('walk', 3)}
 PIXELS_PER_UNIT = 12   # 最大縮放時每個邏輯像素對應的圖片像素
 
 
@@ -161,6 +163,11 @@ def main():
             print(f'{code} {state}: {len(lst)} 格, {size // 1024} KB')
         if 'src' not in entry:   # 沒有靜態圖時:優先用待命第一格,否則用步行第二格(雙腳併攏)
             a = entry['anims']
+            if code in STAND_FRAME and STAND_FRAME[code][0] in a:
+                st, n = STAND_FRAME[code]
+                sa = a[st]
+                entry.update({'src': sa['frames'][min(n, len(sa['frames'])) - 1], 'w': sa['w'], 'h': sa['h'], 'ax': sa['ax'], 'ay': sa['ay']})
+                continue
             first = a.get('idle') or a.get('walk') or next(iter(a.values()))
             fr = first['frames'][1] if first is a.get('walk') and not a.get('idle') and len(first['frames']) > 1 else first['frames'][0]
             entry.update({'src': fr, 'w': first['w'], 'h': first['h'], 'ax': first['ax'], 'ay': first['ay']})
