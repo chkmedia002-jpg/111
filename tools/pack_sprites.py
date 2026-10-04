@@ -17,12 +17,15 @@ OUT = os.path.join(ROOT, 'js', 'sprites_data.js')
 
 # 遊戲中的顯示高度(邏輯像素,從圖的最高點到腳底)。可在檔名對應的條目調整。
 HEIGHT = {'inf': 21, 'inf2': 22, 'light': 30, 'tank': 26, 'art': 28, 'harvester': 24, 'engineer': 19}
-OVERRIDE = {'ming_harvester': 22}   # 例:{'jp_inf2': 24}
+OVERRIDE = {'ming_harvester': 22, 'ming_harvester_side': 15}   # 例:{'jp_inf2': 24}
 # 載具:原圖座標(像素)標出地面中心錨點、車輪(圓心x, 圓心y, 半徑)、車斗(中心, 半長向量, 半寬向量)。
 # 車輪由遊戲程式繪製並依移動距離旋轉;車斗位置用來疊上貨物。
 VEHICLE = {
     'ming_harvester': {'anchor': (766, 646), 'wheels': [(400, 490, 75)],
                        'bed': (505, 352, (118, 66), (62, -31)), 'axis': (0.864, 0.503)},
+    # 正側面(原圖面向左):橫向移動與往上走時使用
+    'ming_harvester_side': {'anchor': (770, 746), 'wheels': [(1210, 640, 105)],
+                            'bed': (1210, 452, (-270, 0), (0, -10)), 'axis': (1, 0)},
 }
 # 沒有靜態圖時,指定用哪一格當站立(待命)姿勢:(狀態, 第幾格,從 1 開始)
 STAND_FRAME = {'jp_inf2': ('walk', 3)}

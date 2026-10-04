@@ -3,7 +3,7 @@
 const SPRITES = {};
 function _loadImg(src, onok) { const img = new Image(); img.onload = onok; img.src = src; return img; }
 for (const [k, d] of Object.entries(typeof SPRITE_DATA !== 'undefined' ? SPRITE_DATA : {})) {
-  const s = SPRITES[k] = Object.assign({ ok: false, anims: {} }, d, { anims: {} });
+  const s = SPRITES[k] = Object.assign({ ok: false, anims: {} }, d, { anims: {}, key: k });
   s.img = _loadImg(d.src, () => { s.ok = true; });
   for (const [state, a] of Object.entries(d.anims || {})) {
     const an = s.anims[state] = { w: a.w, h: a.h, ax: a.ax, ay: a.ay, fps: a.fps, imgs: [], loaded: 0 };
@@ -20,7 +20,17 @@ function drawSpriteUnit(ctx, u, s) {
   const [sx, sy] = P(u.x, u.y, 0);
   const fx = Math.cos(u.dir) - Math.sin(u.dir);
   if (fx < -0.1) u._flip = true; else if (fx > 0.1) u._flip = false;
-  const flip = !!u._flip, sd = flip ? -1 : 1;
+  let flip = !!u._flip;
+  // 載具有正側面圖(代號_side,原圖面向左)時:畫面上橫向或往上走用側面,往下走用斜向
+  const s0 = s;   // 光圈、陰影大小以斜向圖為準,切換視角時不跳動
+  const side = s.veh && SPRITES[s.key + '_side'];
+  if (side && side.ok) {
+    const fy = (Math.cos(u.dir) + Math.sin(u.dir)) / 2, len = Math.hypot(fx, fy) || 1;
+    const down = fy / len;
+    if (down < 0.3) u._side = true; else if (down > 0.45) u._side = false;   // 遲滯,避免來回切換
+    if (u._side) { s = side; flip = fx > 0; }
+  }
+  const sd = flip ? -1 : 1;
   const atk = u.weapon && u.cool > u.weapon.rof - 0.35 ? (u.cool - (u.weapon.rof - 0.35)) / 0.35 : 0;
   // 選擇畫格
   let pic = s, img = s.img, framed = false;
@@ -38,12 +48,12 @@ function drawSpriteUnit(ctx, u, s) {
   const lunge = atk > 0 ? Math.sin(atk * Math.PI) * (atkA ? 1 : 2.4) : 0;
   const tilt = atk > 0 && !atkA ? Math.sin(atk * Math.PI) * 0.14 : 0;
   // 陰影與陣營色光圈
-  if (s.veh) softShadow(ctx, u.x, u.y, s.w * 0.5, s.w * 0.2, 0.45);
+  if (s.veh) softShadow(ctx, u.x, u.y, s0.w * 0.5, s0.w * 0.2, 0.45);
   else softShadow(ctx, u.x, u.y, s.w * 0.42, s.w * 0.17, 0.5);
   const col = G.players[u.owner] ? G.players[u.owner].color : '#fff';
   pushA(ctx, 0.75);
   ctx.strokeStyle = col; ctx.lineWidth = 0.7;
-  ctx.beginPath(); ctx.ellipse(sx, sy, s.w * 0.36, s.w * 0.15, 0, 0, 6.2832); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(sx, sy, s0.w * 0.36, s0.w * 0.15, 0, 0, 6.2832); ctx.stroke();
   popA(ctx);
   ctx.save();
   ctx.translate(sx + sd * lunge, sy - bob);
@@ -95,6 +105,20 @@ function drawBedCargo(ctx, u, bed) {
   const at = (a, b, z) => [cx + hx * a + wx * b, cy + hy * a + wy * b - z];   // a、b ∈ [-1,1]:沿車長、車寬
   if (u.cargoKind === 'wood') {
     const n = 1 + Math.round(fill * 5);
+    const flat = Math.abs(wx) + Math.abs(wy) < 0.6;   // 正側面:看不到車寬,改成一層層往上疊
+    if (flat) {
+      const layers = 1 + Math.round(fill * 2);
+      for (let k = 0; k < layers; k++) {
+        const z = 0.75 + k * 1.3, inset = k * 0.08;
+        const p0 = at(-0.95 + inset, 0, z), p1 = at(0.85 - inset, 0, z);
+        ctx.lineCap = 'round';
+        line(ctx, p0, p1, '#3e2a18', 1.45);
+        line(ctx, [p0[0], p0[1] - 0.15], [p1[0], p1[1] - 0.15], '#6e4c2c', 1.05);
+        line(ctx, [p0[0], p0[1] - 0.45], [p1[0], p1[1] - 0.45], '#a47c50', 0.3);
+        ctx.lineCap = 'butt';
+      }
+      return;
+    }
     for (let k = 0; k < n; k++) {
       const row = k % 3, lay = Math.floor(k / 3);
       const b = -0.6 + row * 0.6, z = 0.6 + lay * 0.9;
