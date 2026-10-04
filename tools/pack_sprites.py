@@ -159,9 +159,11 @@ def main():
             a, size = process_anim(code, state, [t[2] for t in lst])
             entry['anims'][state] = a
             print(f'{code} {state}: {len(lst)} 格, {size // 1024} KB')
-        if 'src' not in entry:   # 沒有靜態圖時,用第一格當作靜態圖
-            first = entry['anims'].get('idle') or next(iter(entry['anims'].values()))
-            entry.update({'src': first['frames'][0], 'w': first['w'], 'h': first['h'], 'ax': first['ax'], 'ay': first['ay']})
+        if 'src' not in entry:   # 沒有靜態圖時:優先用待命第一格,否則用步行第二格(雙腳併攏)
+            a = entry['anims']
+            first = a.get('idle') or a.get('walk') or next(iter(a.values()))
+            fr = first['frames'][1] if first is a.get('walk') and not a.get('idle') and len(first['frames']) > 1 else first['frames'][0]
+            entry.update({'src': fr, 'w': first['w'], 'h': first['h'], 'ax': first['ax'], 'ay': first['ay']})
     with open(OUT, 'w', encoding='utf-8') as fp:
         fp.write("'use strict';\n// 由 tools/pack_sprites.py 產生,請勿手動修改\n")
         fp.write('const SPRITE_DATA = ' + json.dumps(data, ensure_ascii=False, indent=1) + ';\n')
