@@ -410,19 +410,19 @@ Object.assign(FACTIONS, {
     name: '大明', en: 'Great Ming', era: 'ming', color: '#d8382a', beam: '#ff9a30',
     desc: '火器與戚家軍陣法。鳥銃、佛郎機與大將軍砲火力強大,戰車陣穩固難破。',
     units: ['鳥銃手、狼筅長槍兵', '遼東鐵騎、偏廂戰車', '大將軍砲、火龍出水'],
-    names: { conyard: '總兵府', power: '糧倉', refinery: '銀礦冶坊', barracks: '校場', factory: '軍器局', tech: '兵部書院', engineer: '工匠', harvester: '運銀牛車' }
+    names: { conyard: '總兵府', power: '糧倉', refinery: '轉運所', barracks: '校場', factory: '軍器局', tech: '兵部書院', engineer: '工匠', harvester: '運輸牛車' }
   },
   jp: {
     name: '日本', en: 'Toyotomi Japan', era: 'ming', color: '#f0ebdc', beam: '#ff7020',
     desc: '戰國百戰之師。鐵砲足輕齊射,武士近戰無雙,騎馬武者衝鋒迅猛。',
     units: ['鐵砲足輕、武士', '騎馬武者、大筒車', '焙烙投石車、火攻之陣'],
-    names: { conyard: '本丸天守', power: '米藏', refinery: '銀山吹屋', barracks: '足輕長屋', factory: '鍛冶場', tech: '軍學所', engineer: '工匠', harvester: '運銀牛車' }
+    names: { conyard: '本丸天守', power: '米藏', refinery: '蔵屋敷', barracks: '足輕長屋', factory: '鍛冶場', tech: '軍學所', engineer: '工匠', harvester: '運輸牛車' }
   },
   kr: {
     name: '朝鮮', en: 'Joseon', era: 'ming', color: '#2f74dc', beam: '#ffb040',
     desc: '弓術冠絕東亞。華車一次齊射百支神機箭,震天雷可轟塌城牆。',
     units: ['弓手、殺手', '騎射手、華車', '震天雷砲、神機箭陣'],
-    names: { conyard: '統制營', power: '軍倉', refinery: '銀店', barracks: '訓練院', factory: '軍器寺', tech: '承文院', engineer: '工匠', harvester: '運銀牛車' }
+    names: { conyard: '統制營', power: '軍倉', refinery: '物資庫', barracks: '訓練院', factory: '軍器寺', tech: '承文院', engineer: '工匠', harvester: '運輸牛車' }
   }
 });
 FACTIONS.ac.units = ['脈衝步兵、雷射突擊兵', '獵鷹偵察車、赫利俄斯雷射戰車', '日冕光束砲車、天穹軌道雷射'];
@@ -437,7 +437,7 @@ const ERAS = {
   },
   ming: {
     name: '1592 壬辰之役', title: '烽火東亞 <span>1592</span>', factions: ['mg', 'jp', 'kr'], players: 3,
-    power: '糧草', ore: '銀礦', silver: true,
+    power: '糧草', ore: '資源', silver: true, gather: true,
     story: '萬曆二十年,豐臣秀吉渡海出兵朝鮮,意圖假道入明。朝鮮八道烽火連天,大明援軍東渡鴨綠江。三國大軍在朝鮮半島爭奪銀礦與糧道,一場決定東亞命運的大戰就此展開。',
     start: '烽火已燃,全軍備戰'
   }
@@ -451,6 +451,17 @@ function eraText(s) {
   if (list) for (const [a, b] of list) s = s.split(a).join(b);
   return s;
 }
+// 明朝時代可採集的地物資源:木材(樹林)、石材(岩石),運回後換算成銀兩
+const GATHER = {
+  wood:  { rate: 75, value: 1.0, name: '木材', amount: 260 },
+  stone: { rate: 60, value: 1.5, name: '石材', amount: 520 }
+};
+const CARGO_NAME = { silver: '銀礦', wood: '木材', stone: '石材', ore: '稀土' };
+const ERA_DESC = {
+  ming: { refinery: '資源集散處:採集車把銀礦、木材、石材運回這裡換成銀兩。附贈一輛運輸牛車。',
+          harvester: '自動採集銀礦、木材(砍樹)與石材(採石)。右鍵點樹林或岩石可指定採集。' }
+};
+function ddesc(type) { const e = ERA_DESC[G.era]; return (e && e[type]) || getDef(type).desc || ''; }
 function dname(type, faction) {
   const f = FACTIONS[faction];
   return (f && f.names && f.names[type]) || getDef(type).name;
@@ -549,6 +560,7 @@ class GameMap {
     this.variant = new Uint8Array(n);
     this.bld = new Int32Array(n);       // 建築佔用 (entity id)
     this.oreFields = [];
+    this.res = new Float32Array(n);     // 樹林木材 / 岩石石材
     this.generate(seed);
   }
   idx(x, y) { return y * MAP_W + x; }
@@ -621,10 +633,26 @@ class GameMap {
         }
       }
     };
+    for (let i = 0; i < MAP_W * MAP_H; i++) {
+      const t = this.terrain[i];
+      if (t === T_TREE) this.res[i] = 200 + (this.variant[i] % 120);
+      else if (t === T_ROCK) this.res[i] = 420 + (this.variant[i] % 200);
+    }
     for (let i = 1; i < sc.length; i++) ensure(sc[0].x, sc[0].y, sc[i].x, sc[i].y);
     for (const f of fields) for (const s of sc) ensure(s.x, s.y, f.x, f.y);
   }
 
+  // 可採集的樹林/岩石:需緊鄰可通行的格子
+  gatherKind(x, y) {
+    if (!this.inb(x, y)) return null;
+    const i = this.idx(x, y), t = this.terrain[i];
+    if (this.res[i] <= 0) return null;
+    return t === T_TREE ? 'wood' : t === T_ROCK ? 'stone' : null;
+  }
+  reachableEdge(x, y) {
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) if (this.passable(x + dx, y + dy)) return true;
+    return false;
+  }
   reachable(ax, ay, bx, by) {
     const seen = new Uint8Array(MAP_W * MAP_H);
     const q = [ax + ay * MAP_W]; seen[q[0]] = 1;
@@ -790,7 +818,7 @@ function _noise(dur, vol, freq, q, dest, type = 'lowpass') {
 function sfx(name, x, y) {
   if (!Audio2.on || !Audio2.ctx) return;
   const now = performance.now();
-  const gap = { gun: 70, laserS: 70, laser: 80, cannonS: 70 }[name] || 50;
+  const gap = { gun: 70, laserS: 70, laser: 80, cannonS: 70, chop: 220, pick: 220 }[name] || 50;
   if (Audio2.last[name] && now - Audio2.last[name] < gap) return;
   Audio2.last[name] = now;
   let vol = 1;
@@ -822,6 +850,9 @@ function sfx(name, x, y) {
     case 'clang': _osc('square', 1400, 1100, 0.08, 0.06, out); _osc('triangle', 2600, 2200, 0.15, 0.06, out); _noise(0.05, 0.3, 4000, 2, out, 'bandpass'); break;
     case 'cannonOld': _noise(0.9, 1.0, 350, 1, out); _osc('sine', 80, 25, 0.7, 0.7, out); break;
     case 'whoosh': _noise(0.5, 0.4, 600, 0.6, out, 'bandpass'); break;
+    case 'chop': _noise(0.08, 0.5, 1200, 2, out, 'bandpass'); _osc('triangle', 300, 180, 0.06, 0.12, out); break;
+    case 'pick': _osc('square', 1800, 1500, 0.05, 0.05, out); _noise(0.06, 0.4, 3500, 2, out, 'bandpass'); break;
+    case 'treefall': _noise(0.9, 0.7, 500, 1, out); _osc('sine', 120, 50, 0.6, 0.3, out); break;
     case 'ack': _osc('square', 500, 800, 0.06, 0.06, out); break;
   }
 }
@@ -1052,6 +1083,17 @@ function placeBuilding(p, type, tx, ty, instant) {
   return b;
 }
 
+// 樹林砍完 / 岩石採完:變成可通行的地面,留下樹樁或碎石
+function depleteTile(x, y) {
+  const m = G.map, i = m.idx(x, y), wasTree = m.terrain[i] === T_TREE;
+  m.res[i] = 0;
+  m.terrain[i] = wasTree ? T_GRASS : T_DIRT;
+  if (R.doodads) R.doodads = R.doodads.filter(d => !(Math.floor(d.x) === x && Math.floor(d.y) === y));
+  if (R.doodadAt) R.doodadAt.delete(i);
+  if (R.stumps) R.stumps.push({ x: x + 0.5, y: y + 0.5, wood: wasTree, v: m.variant[i] });
+  sfx(wasTree ? 'treefall' : 'pick', x, y);
+}
+
 function refineryDock(b) { return G.map.nearestPassable(b.tx + b.w, b.ty + 1, 5); }
 
 // 距離:目標若為建築,量到其範圍邊緣
@@ -1237,6 +1279,11 @@ class Unit {
     this.cool = Math.random() * 0.5; this.scan = Math.random() * 0.5; this.repath = 0;
     this.anim = Math.random() * 10; this.moving = false; this.stuckT = 0; this.bestD = 1e9;
     this.cargo = 0; this.hstate = 'seek'; this.htile = null; this.wait = 0; this.ref = null;
+    // 明朝時代:每輛採集車輪流偏好不同資源(銀、木、銀、石),讓基地同時採集多種資源
+    if (this.def.harvester) {
+      const n = G.entities.filter(e => e.alive && e.owner === owner && e.kind === 'unit' && e.def.harvester).length;
+      this.pref = ['silver', 'wood', 'silver', 'stone'][n % 4];
+    }
     this.hitT = -99; this.xp = 0; this.rank = 0;
   }
   muzzle() {
@@ -1399,13 +1446,36 @@ class Unit {
       case 'toOre':
         if (this.followPath(dt)) {
           const tx = Math.floor(this.x), ty = Math.floor(this.y);
-          if (m.ore[m.idx(tx, ty)] > 5) { this.htile = [tx, ty]; this.hstate = 'harvest'; }
-          else { this.hstate = 'seek'; this.wait = 0.3; }
+          const h = this.htile;
+          if (h && m.gatherKind(h[0], h[1]) && Math.max(Math.abs(h[0] - tx), Math.abs(h[1] - ty)) <= 1) this.hstate = 'harvest';
+          else if (m.ore[m.idx(tx, ty)] > 5) { this.htile = [tx, ty]; this.hstate = 'harvest'; }
+          else { this.hstate = 'seek'; this.wait = 0.3; if (h) this.skip = h[0] + h[1] * MAP_W; }
         }
         break;
       case 'harvest': {
         this.moving = false;
         const i = m.idx(this.htile[0], this.htile[1]);
+        const gk = m.gatherKind(this.htile[0], this.htile[1]);
+        if (gk) {
+          // 砍樹 / 採石
+          const R0 = GATHER[gk];
+          this.dir = rotateTo(this.dir, Math.atan2(this.htile[1] + 0.5 - this.y, this.htile[0] + 0.5 - this.x), 4 * dt);
+          const take = Math.min(R0.rate * dt, m.res[i], (HARV_CAP - this.cargo) / R0.value);
+          m.res[i] -= take; this.cargo += take * R0.value; this.cargoKind = gk;
+          this.anim += dt * 8;
+          if (Math.random() < dt * 6) {
+            G.effects.push({ k: 'part', x: this.htile[0] + 0.5 + (Math.random() - 0.5) * 0.4, y: this.htile[1] + 0.5 + (Math.random() - 0.5) * 0.4, z: gk === 'wood' ? 6 : 3,
+              vx: (Math.random() - 0.5) * 1.5, vy: (Math.random() - 0.5) * 1.5, vz: 15 + Math.random() * 20, c: gk === 'wood' ? '#8a6440' : '#555', t: 0, dur: 0.5 });
+            const dd = R.doodadAt && R.doodadAt.get(i); if (dd) dd.hitT = G.time;
+            sfx(gk === 'wood' ? 'chop' : 'pick', this.x, this.y);
+          }
+          if (m.res[i] <= 0.5) depleteTile(this.htile[0], this.htile[1]);
+          if (this.cargo >= HARV_CAP - 0.5) { this.hstate = 'toRef'; this.ref = null; }
+          else if (m.res[i] <= 0.5) this.hstate = 'seek';
+          break;
+        }
+        if (m.ore[i] < 1) { this.hstate = 'seek'; break; }
+        this.cargoKind = G.era === 'ming' ? 'silver' : 'ore';
         const mult = m.oreType[i] === 2 ? 2 : 1;
         const take = Math.min(HARV_RATE * dt, m.ore[i], (HARV_CAP - this.cargo) / mult);
         m.ore[i] -= take; this.cargo += take * mult;
@@ -1447,15 +1517,31 @@ class Unit {
   findOre() {
     const m = G.map;
     let best = null, bs = 1e9;
+    const gatherEra = ERAS[G.era] && ERAS[G.era].gather;
     const ox = this.htile ? this.htile[0] : this.x, oy = this.htile ? this.htile[1] : this.y;
     const claimed = new Set();
     for (const e of G.entities) if (e !== this && e.alive && e.kind === 'unit' && e.def.harvester && e.htile && (e.hstate === 'toOre' || e.hstate === 'harvest')) claimed.add(e.htile[0] + e.htile[1] * MAP_W);
     for (let i = 0; i < m.ore.length; i++) {
       if (m.ore[i] < 30 || m.bld[i]) continue;
       const x = i % MAP_W, y = (i / MAP_W) | 0;
-      let s = dist(ox, oy, x, y) + (claimed.has(i) ? 6 : 0);
+      let s = dist(ox, oy, x, y) + (claimed.has(i) ? 6 : 0) + (gatherEra && this.pref && this.pref !== 'silver' ? 8 : 0);
       if (s < bs) { bs = s; best = [x, y]; }
     }
+    // 明朝時代:樹林與岩石也可採集(稍微偏好銀礦)
+    if (gatherEra) {
+      for (let i = 0; i < m.res.length; i++) {
+        if (m.res[i] <= 0 || i === this.skip) continue;
+        const x = i % MAP_W, y = (i / MAP_W) | 0;
+        const kind = m.terrain[i] === T_TREE ? 'wood' : 'stone';
+        const pen = kind === this.pref ? 0 : 8;
+        const d0 = dist(ox, oy, x, y);
+        if (d0 + pen >= bs) continue;
+        if (!m.reachableEdge(x, y)) continue;
+        const s = d0 + pen + (claimed.has(i) ? 4 : 0);
+        if (s < bs) { bs = s; best = [x, y]; }
+      }
+    }
+    this.skip = -1;
     return best;
   }
 }
@@ -2267,10 +2353,13 @@ function buildTerrain() {
   mc.getContext('2d').drawImage(cv, 0, 0, 240, 121);
   R.miniTerrain = mc;
   // 地物
-  R.doodads = [];
+  R.doodads = []; R.doodadAt = new Map(); R.stumps = [];
   for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
     const t = m.terrain[m.idx(x, y)];
-    if (t === T_TREE || t === T_ROCK) R.doodads.push({ kind: 'doodad', t, x: x + 0.5, y: y + 0.5, v: m.variant[m.idx(x, y)] });
+    if (t === T_TREE || t === T_ROCK) {
+      const d = { kind: 'doodad', t, x: x + 0.5, y: y + 0.5, v: m.variant[m.idx(x, y)] };
+      R.doodads.push(d); R.doodadAt.set(m.idx(x, y), d);
+    }
   }
   R.sprites.clear();
   R.fogCv = document.createElement('canvas'); R.fogCv.width = MAP_W; R.fogCv.height = MAP_H;
@@ -2655,6 +2744,23 @@ function drawAncientStrike(ctx, s) {
   }
 }
 
+function drawStump(ctx, s) {
+  const [x, y] = P(s.x, s.y, 0);
+  if (s.wood) {
+    ell(ctx, x + 1, y + 0.5, 3.2, 1.4, 'rgba(0,0,0,0.3)');
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(x - 1.6, y - 2.2, 3.2, 2.2);
+    ell(ctx, x, y + 0, 1.6, 0.8, '#5a3c24');
+    ell(ctx, x, y - 2.2, 1.6, 0.8, '#c8a070'); ell(ctx, x, y - 2.2, 0.8, 0.4, '#a07848');
+    for (let k = 0; k < 4; k++) circ(ctx, x + Math.cos(s.v + k * 1.7) * 4, y + Math.sin(s.v + k * 1.7) * 1.6, 0.4, '#7a5a34');
+  } else {
+    for (let k = 0; k < 6; k++) {
+      const a = s.v * 0.7 + k * 1.05, r = 1.5 + (k % 3) * 1.6;
+      const px = x + Math.cos(a) * r * 1.5, py = y + Math.sin(a) * r * 0.6;
+      ell(ctx, px, py, 1.3, 0.8, k % 2 ? '#7d7870' : '#99948b');
+    }
+  }
+}
+
 // ===== 主渲染 =====
 function render() {
   const ctx = R.ctx, m = G.map, p = me();
@@ -2680,6 +2786,7 @@ function render() {
     }
   }
   drawOre(ctx, x0, y0, x1, y1);
+  for (const s of R.stumps) if (onScreen(s.x, s.y)) drawStump(ctx, s);
   for (const f of G.effects) if (f.k === 'scorch' || f.k === 'corpse' || f.k === 'wreck' || f.k === 'hcorpse') if (onScreen(f.x, f.y)) drawGroundEffect(ctx, f);
   if (UI.placing && UI.hoverTile) drawPlacement(ctx);
 
@@ -3650,7 +3757,9 @@ function drawDoodad(ctx, d) {
   const [sx, sy] = P(d.x, d.y, 0);
   const key = d.t + '_' + d.v;
   const s = spriteCached(key, 48, 52, 24, 44, (c, ax, ay) => d.t === T_TREE ? paintTree(c, ax, ay, d.v) : paintRock(c, ax, ay, d.v));
-  ctx.drawImage(s.cv, sx - s.ax, sy - s.ay, s.w, s.h);
+  // 被砍伐時搖晃
+  const shake = d.hitT && G.time - d.hitT < 0.18 ? Math.sin((G.time - d.hitT) * 60) * (d.t === T_TREE ? 1.2 : 0.4) : 0;
+  ctx.drawImage(s.cv, sx - s.ax + shake, sy - s.ay, s.w, s.h);
 }
 function paintTree(c, ax, ay, v) {
   const rng = mulberry32(v * 9973 + 17);
@@ -4441,7 +4550,21 @@ function drawOxCart(ctx, u, col) {
   const box = prism(ctx, Q, rect(-0.45, -0.24, 0.2, 0.24), rect(-0.47, -0.26, 0.22, 0.26), 3.6, 6.4, '#8a6440', '#2e241a');
   void box;
   const fill = clamp((u.cargo || 0) / HARV_CAP, 0, 1);
-  if (fill > 0.03) {
+  if (fill > 0.03 && u.cargoKind === 'wood') {
+    const n = 1 + Math.round(fill * 5);
+    for (let k = 0; k < n; k++) {
+      const row = k % 3, lay = Math.floor(k / 3);
+      const a = Q(-0.42, -0.14 + row * 0.14, 6.6 + lay * 1.6), b = Q(0.18, -0.14 + row * 0.14, 6.6 + lay * 1.6);
+      ctx.lineCap = 'round'; line(ctx, a, b, '#6a4a2c', 2); line(ctx, [a[0], a[1] - 0.5], [b[0], b[1] - 0.5], '#9a7448', 0.6); ctx.lineCap = 'butt';
+      ell(ctx, b[0], b[1], 1, 1, '#d0a874'); ell(ctx, b[0], b[1], 0.45, 0.45, '#a07848');
+    }
+  } else if (fill > 0.03 && u.cargoKind === 'stone') {
+    const n = 2 + Math.round(fill * 6);
+    for (let k = 0; k < n; k++) {
+      const [px, py] = Q(-0.35 + (k % 4) * 0.16, -0.12 + Math.floor(k / 4) * 0.16, 6.6 + Math.floor(k / 4) * 1.2);
+      poly(ctx, [[px - 1.6, py], [px - 0.6, py - 1.6], [px + 1.4, py - 1.2], [px + 1.6, py + 0.6], [px, py + 1]], k % 2 ? '#8a857c' : '#a6a196');
+    }
+  } else if (fill > 0.03) {
     const [ox, oy] = Q(-0.12, 0, 6.4 + fill * 1.5);
     const r = 3 + fill * 3;
     ctx.fillStyle = vgrad(ctx, oy + 1, oy - r * 0.6, '#6a6e74', '#d8dce2');
@@ -4642,7 +4765,7 @@ function rebuildGrid() {
     const nm = dname(t, p.faction);
     el.insertAdjacentHTML('beforeend', `<div class="prog"></div><div class="nm">${nm}</div><div class="cnt"></div><div class="rdy">就緒</div>`);
     const reqTxt = d.req.length ? '需要:' + d.req.map(r => dname(r, p.faction)).join('、') : '';
-    el.title = `${nm}  $${d.cost}\n${d.desc || ''}${ok ? '' : '\n' + reqTxt}\n左鍵:建造/排程(Shift ×5) 右鍵:暫停/取消`;
+    el.title = `${nm}  $${d.cost}\n${ddesc(t)}${ok ? '' : '\n' + reqTxt}\n左鍵:建造/排程(Shift ×5) 右鍵:暫停/取消`;
     el.onmousedown = ev => {
       ev.preventDefault();
       if (!canBuildType(p, t)) { eva('條件不足', false); return; }
@@ -4724,7 +4847,7 @@ function updateInfo() {
   if (s.length === 1) {
     const e = s[0], d = e.def, own = e.owner === G.human;
     let extra = '';
-    if (e.kind === 'unit' && d.harvester) extra = `<br>載貨:${Math.floor(e.cargo)} / ${HARV_CAP}`;
+    if (e.kind === 'unit' && d.harvester) extra = `<br>載貨:${e.cargo > 0 && e.cargoKind ? CARGO_NAME[e.cargoKind] + ' ' : ''}${Math.floor(e.cargo)} / ${HARV_CAP}`;
     if (e.kind === 'unit' && e.weapon) extra = `<br>武器射程:${e.weapon.range}`;
     if (e.kind === 'unit' && !d.harvester) extra += `<br>等級:${VET[e.rank].name}`;
     if (e.kind === 'bld' && d.power) extra = `<br>電力:${d.power > 0 ? '+' : ''}${d.power}`;
@@ -4974,8 +5097,20 @@ function rightClick(x, y, ev) {
   // 採集車點礦
   const m = G.map, tx = Math.floor(wx), ty = Math.floor(wy);
   const harv = us.filter(u => u.def.harvester), others = us.filter(u => !u.def.harvester);
-  if (harv.length && m.inb(tx, ty) && m.ore[m.idx(tx, ty)] > 10) {
-    for (const h of harv) { h.order = { t: 'harvest' }; h.htile = [tx, ty]; h.hstate = 'toOre'; h.pathTo(tx + 0.5, ty + 0.5); }
+  // 右鍵點樹林/岩石:樹冠和岩石畫在格子上方,所以也往下檢查幾格
+  let gt = null;
+  if (harv.length && ERAS[G.era].gather) for (const zz of [0, 6, 12, 18]) {
+    const [gx, gy] = screenToWorld(x, y + zz), ix = Math.floor(gx), iy = Math.floor(gy);
+    if (m.gatherKind(ix, iy)) { gt = [ix, iy]; break; }
+  }
+  if (gt) {
+    const kind = m.gatherKind(gt[0], gt[1]);
+    for (const h of harv) { h.order = { t: 'harvest' }; h.htile = gt; h.hstate = 'toOre'; h.pref = kind; h.pathTo(gt[0] + 0.5, gt[1] + 0.5); }
+    G.effects.push({ k: 'marker', x: gt[0] + 0.5, y: gt[1] + 0.5, c: '#ffd040', t: 0, dur: 0.5 });
+    sfx('ack');
+    if (!others.length) return;
+  } else if (harv.length && m.inb(tx, ty) && m.ore[m.idx(tx, ty)] > 10) {
+    for (const h of harv) { h.order = { t: 'harvest' }; h.htile = [tx, ty]; h.hstate = 'toOre'; h.pref = 'silver'; h.pathTo(tx + 0.5, ty + 0.5); }
   } else if (harv.length && t && t.kind === 'bld' && t.type === 'refinery') {
     for (const h of harv) { h.order = { t: 'harvest' }; h.hstate = 'toRef'; h.ref = null; }
   } else if (harv.length) cmdMove(harv, wx, wy, false);

@@ -680,7 +680,21 @@ function drawOxCart(ctx, u, col) {
   const box = prism(ctx, Q, rect(-0.45, -0.24, 0.2, 0.24), rect(-0.47, -0.26, 0.22, 0.26), 3.6, 6.4, '#8a6440', '#2e241a');
   void box;
   const fill = clamp((u.cargo || 0) / HARV_CAP, 0, 1);
-  if (fill > 0.03) {
+  if (fill > 0.03 && u.cargoKind === 'wood') {
+    const n = 1 + Math.round(fill * 5);
+    for (let k = 0; k < n; k++) {
+      const row = k % 3, lay = Math.floor(k / 3);
+      const a = Q(-0.42, -0.14 + row * 0.14, 6.6 + lay * 1.6), b = Q(0.18, -0.14 + row * 0.14, 6.6 + lay * 1.6);
+      ctx.lineCap = 'round'; line(ctx, a, b, '#6a4a2c', 2); line(ctx, [a[0], a[1] - 0.5], [b[0], b[1] - 0.5], '#9a7448', 0.6); ctx.lineCap = 'butt';
+      ell(ctx, b[0], b[1], 1, 1, '#d0a874'); ell(ctx, b[0], b[1], 0.45, 0.45, '#a07848');
+    }
+  } else if (fill > 0.03 && u.cargoKind === 'stone') {
+    const n = 2 + Math.round(fill * 6);
+    for (let k = 0; k < n; k++) {
+      const [px, py] = Q(-0.35 + (k % 4) * 0.16, -0.12 + Math.floor(k / 4) * 0.16, 6.6 + Math.floor(k / 4) * 1.2);
+      poly(ctx, [[px - 1.6, py], [px - 0.6, py - 1.6], [px + 1.4, py - 1.2], [px + 1.6, py + 0.6], [px, py + 1]], k % 2 ? '#8a857c' : '#a6a196');
+    }
+  } else if (fill > 0.03) {
     const [ox, oy] = Q(-0.12, 0, 6.4 + fill * 1.5);
     const r = 3 + fill * 3;
     ctx.fillStyle = vgrad(ctx, oy + 1, oy - r * 0.6, '#6a6e74', '#d8dce2');

@@ -867,7 +867,9 @@ function drawDoodad(ctx, d) {
   const [sx, sy] = P(d.x, d.y, 0);
   const key = d.t + '_' + d.v;
   const s = spriteCached(key, 48, 52, 24, 44, (c, ax, ay) => d.t === T_TREE ? paintTree(c, ax, ay, d.v) : paintRock(c, ax, ay, d.v));
-  ctx.drawImage(s.cv, sx - s.ax, sy - s.ay, s.w, s.h);
+  // 被砍伐時搖晃
+  const shake = d.hitT && G.time - d.hitT < 0.18 ? Math.sin((G.time - d.hitT) * 60) * (d.t === T_TREE ? 1.2 : 0.4) : 0;
+  ctx.drawImage(s.cv, sx - s.ax + shake, sy - s.ay, s.w, s.h);
 }
 function paintTree(c, ax, ay, v) {
   const rng = mulberry32(v * 9973 + 17);

@@ -34,6 +34,7 @@ class GameMap {
     this.variant = new Uint8Array(n);
     this.bld = new Int32Array(n);       // 建築佔用 (entity id)
     this.oreFields = [];
+    this.res = new Float32Array(n);     // 樹林木材 / 岩石石材
     this.generate(seed);
   }
   idx(x, y) { return y * MAP_W + x; }
@@ -106,10 +107,26 @@ class GameMap {
         }
       }
     };
+    for (let i = 0; i < MAP_W * MAP_H; i++) {
+      const t = this.terrain[i];
+      if (t === T_TREE) this.res[i] = 200 + (this.variant[i] % 120);
+      else if (t === T_ROCK) this.res[i] = 420 + (this.variant[i] % 200);
+    }
     for (let i = 1; i < sc.length; i++) ensure(sc[0].x, sc[0].y, sc[i].x, sc[i].y);
     for (const f of fields) for (const s of sc) ensure(s.x, s.y, f.x, f.y);
   }
 
+  // 可採集的樹林/岩石:需緊鄰可通行的格子
+  gatherKind(x, y) {
+    if (!this.inb(x, y)) return null;
+    const i = this.idx(x, y), t = this.terrain[i];
+    if (this.res[i] <= 0) return null;
+    return t === T_TREE ? 'wood' : t === T_ROCK ? 'stone' : null;
+  }
+  reachableEdge(x, y) {
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) if (this.passable(x + dx, y + dy)) return true;
+    return false;
+  }
   reachable(ax, ay, bx, by) {
     const seen = new Uint8Array(MAP_W * MAP_H);
     const q = [ax + ay * MAP_W]; seen[q[0]] = 1;

@@ -43,7 +43,7 @@ function _noise(dur, vol, freq, q, dest, type = 'lowpass') {
 function sfx(name, x, y) {
   if (!Audio2.on || !Audio2.ctx) return;
   const now = performance.now();
-  const gap = { gun: 70, laserS: 70, laser: 80, cannonS: 70 }[name] || 50;
+  const gap = { gun: 70, laserS: 70, laser: 80, cannonS: 70, chop: 220, pick: 220 }[name] || 50;
   if (Audio2.last[name] && now - Audio2.last[name] < gap) return;
   Audio2.last[name] = now;
   let vol = 1;
@@ -75,6 +75,9 @@ function sfx(name, x, y) {
     case 'clang': _osc('square', 1400, 1100, 0.08, 0.06, out); _osc('triangle', 2600, 2200, 0.15, 0.06, out); _noise(0.05, 0.3, 4000, 2, out, 'bandpass'); break;
     case 'cannonOld': _noise(0.9, 1.0, 350, 1, out); _osc('sine', 80, 25, 0.7, 0.7, out); break;
     case 'whoosh': _noise(0.5, 0.4, 600, 0.6, out, 'bandpass'); break;
+    case 'chop': _noise(0.08, 0.5, 1200, 2, out, 'bandpass'); _osc('triangle', 300, 180, 0.06, 0.12, out); break;
+    case 'pick': _osc('square', 1800, 1500, 0.05, 0.05, out); _noise(0.06, 0.4, 3500, 2, out, 'bandpass'); break;
+    case 'treefall': _noise(0.9, 0.7, 500, 1, out); _osc('sine', 120, 50, 0.6, 0.3, out); break;
     case 'ack': _osc('square', 500, 800, 0.06, 0.06, out); break;
   }
 }

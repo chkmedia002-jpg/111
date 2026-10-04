@@ -47,7 +47,7 @@ function rebuildGrid() {
     const nm = dname(t, p.faction);
     el.insertAdjacentHTML('beforeend', `<div class="prog"></div><div class="nm">${nm}</div><div class="cnt"></div><div class="rdy">就緒</div>`);
     const reqTxt = d.req.length ? '需要:' + d.req.map(r => dname(r, p.faction)).join('、') : '';
-    el.title = `${nm}  $${d.cost}\n${d.desc || ''}${ok ? '' : '\n' + reqTxt}\n左鍵:建造/排程(Shift ×5) 右鍵:暫停/取消`;
+    el.title = `${nm}  $${d.cost}\n${ddesc(t)}${ok ? '' : '\n' + reqTxt}\n左鍵:建造/排程(Shift ×5) 右鍵:暫停/取消`;
     el.onmousedown = ev => {
       ev.preventDefault();
       if (!canBuildType(p, t)) { eva('條件不足', false); return; }
@@ -129,7 +129,7 @@ function updateInfo() {
   if (s.length === 1) {
     const e = s[0], d = e.def, own = e.owner === G.human;
     let extra = '';
-    if (e.kind === 'unit' && d.harvester) extra = `<br>載貨:${Math.floor(e.cargo)} / ${HARV_CAP}`;
+    if (e.kind === 'unit' && d.harvester) extra = `<br>載貨:${e.cargo > 0 && e.cargoKind ? CARGO_NAME[e.cargoKind] + ' ' : ''}${Math.floor(e.cargo)} / ${HARV_CAP}`;
     if (e.kind === 'unit' && e.weapon) extra = `<br>武器射程:${e.weapon.range}`;
     if (e.kind === 'unit' && !d.harvester) extra += `<br>等級:${VET[e.rank].name}`;
     if (e.kind === 'bld' && d.power) extra = `<br>電力:${d.power > 0 ? '+' : ''}${d.power}`;
@@ -379,8 +379,20 @@ function rightClick(x, y, ev) {
   // 採集車點礦
   const m = G.map, tx = Math.floor(wx), ty = Math.floor(wy);
   const harv = us.filter(u => u.def.harvester), others = us.filter(u => !u.def.harvester);
-  if (harv.length && m.inb(tx, ty) && m.ore[m.idx(tx, ty)] > 10) {
-    for (const h of harv) { h.order = { t: 'harvest' }; h.htile = [tx, ty]; h.hstate = 'toOre'; h.pathTo(tx + 0.5, ty + 0.5); }
+  // 右鍵點樹林/岩石:樹冠和岩石畫在格子上方,所以也往下檢查幾格
+  let gt = null;
+  if (harv.length && ERAS[G.era].gather) for (const zz of [0, 6, 12, 18]) {
+    const [gx, gy] = screenToWorld(x, y + zz), ix = Math.floor(gx), iy = Math.floor(gy);
+    if (m.gatherKind(ix, iy)) { gt = [ix, iy]; break; }
+  }
+  if (gt) {
+    const kind = m.gatherKind(gt[0], gt[1]);
+    for (const h of harv) { h.order = { t: 'harvest' }; h.htile = gt; h.hstate = 'toOre'; h.pref = kind; h.pathTo(gt[0] + 0.5, gt[1] + 0.5); }
+    G.effects.push({ k: 'marker', x: gt[0] + 0.5, y: gt[1] + 0.5, c: '#ffd040', t: 0, dur: 0.5 });
+    sfx('ack');
+    if (!others.length) return;
+  } else if (harv.length && m.inb(tx, ty) && m.ore[m.idx(tx, ty)] > 10) {
+    for (const h of harv) { h.order = { t: 'harvest' }; h.htile = [tx, ty]; h.hstate = 'toOre'; h.pref = 'silver'; h.pathTo(tx + 0.5, ty + 0.5); }
   } else if (harv.length && t && t.kind === 'bld' && t.type === 'refinery') {
     for (const h of harv) { h.order = { t: 'harvest' }; h.hstate = 'toRef'; h.ref = null; }
   } else if (harv.length) cmdMove(harv, wx, wy, false);

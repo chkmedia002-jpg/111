@@ -201,6 +201,17 @@ function placeBuilding(p, type, tx, ty, instant) {
   return b;
 }
 
+// 樹林砍完 / 岩石採完:變成可通行的地面,留下樹樁或碎石
+function depleteTile(x, y) {
+  const m = G.map, i = m.idx(x, y), wasTree = m.terrain[i] === T_TREE;
+  m.res[i] = 0;
+  m.terrain[i] = wasTree ? T_GRASS : T_DIRT;
+  if (R.doodads) R.doodads = R.doodads.filter(d => !(Math.floor(d.x) === x && Math.floor(d.y) === y));
+  if (R.doodadAt) R.doodadAt.delete(i);
+  if (R.stumps) R.stumps.push({ x: x + 0.5, y: y + 0.5, wood: wasTree, v: m.variant[i] });
+  sfx(wasTree ? 'treefall' : 'pick', x, y);
+}
+
 function refineryDock(b) { return G.map.nearestPassable(b.tx + b.w, b.ty + 1, 5); }
 
 // 距離:目標若為建築,量到其範圍邊緣
@@ -386,6 +397,11 @@ class Unit {
     this.cool = Math.random() * 0.5; this.scan = Math.random() * 0.5; this.repath = 0;
     this.anim = Math.random() * 10; this.moving = false; this.stuckT = 0; this.bestD = 1e9;
     this.cargo = 0; this.hstate = 'seek'; this.htile = null; this.wait = 0; this.ref = null;
+    // 明朝時代:每輛採集車輪流偏好不同資源(銀、木、銀、石),讓基地同時採集多種資源
+    if (this.def.harvester) {
+      const n = G.entities.filter(e => e.alive && e.owner === owner && e.kind === 'unit' && e.def.harvester).length;
+      this.pref = ['silver', 'wood', 'silver', 'stone'][n % 4];
+    }
     this.hitT = -99; this.xp = 0; this.rank = 0;
   }
   muzzle() {
@@ -548,13 +564,36 @@ class Unit {
       case 'toOre':
         if (this.followPath(dt)) {
           const tx = Math.floor(this.x), ty = Math.floor(this.y);
-          if (m.ore[m.idx(tx, ty)] > 5) { this.htile = [tx, ty]; this.hstate = 'harvest'; }
-          else { this.hstate = 'seek'; this.wait = 0.3; }
+          const h = this.htile;
+          if (h && m.gatherKind(h[0], h[1]) && Math.max(Math.abs(h[0] - tx), Math.abs(h[1] - ty)) <= 1) this.hstate = 'harvest';
+          else if (m.ore[m.idx(tx, ty)] > 5) { this.htile = [tx, ty]; this.hstate = 'harvest'; }
+          else { this.hstate = 'seek'; this.wait = 0.3; if (h) this.skip = h[0] + h[1] * MAP_W; }
         }
         break;
       case 'harvest': {
         this.moving = false;
         const i = m.idx(this.htile[0], this.htile[1]);
+        const gk = m.gatherKind(this.htile[0], this.htile[1]);
+        if (gk) {
+          // 砍樹 / 採石
+          const R0 = GATHER[gk];
+          this.dir = rotateTo(this.dir, Math.atan2(this.htile[1] + 0.5 - this.y, this.htile[0] + 0.5 - this.x), 4 * dt);
+          const take = Math.min(R0.rate * dt, m.res[i], (HARV_CAP - this.cargo) / R0.value);
+          m.res[i] -= take; this.cargo += take * R0.value; this.cargoKind = gk;
+          this.anim += dt * 8;
+          if (Math.random() < dt * 6) {
+            G.effects.push({ k: 'part', x: this.htile[0] + 0.5 + (Math.random() - 0.5) * 0.4, y: this.htile[1] + 0.5 + (Math.random() - 0.5) * 0.4, z: gk === 'wood' ? 6 : 3,
+              vx: (Math.random() - 0.5) * 1.5, vy: (Math.random() - 0.5) * 1.5, vz: 15 + Math.random() * 20, c: gk === 'wood' ? '#8a6440' : '#555', t: 0, dur: 0.5 });
+            const dd = R.doodadAt && R.doodadAt.get(i); if (dd) dd.hitT = G.time;
+            sfx(gk === 'wood' ? 'chop' : 'pick', this.x, this.y);
+          }
+          if (m.res[i] <= 0.5) depleteTile(this.htile[0], this.htile[1]);
+          if (this.cargo >= HARV_CAP - 0.5) { this.hstate = 'toRef'; this.ref = null; }
+          else if (m.res[i] <= 0.5) this.hstate = 'seek';
+          break;
+        }
+        if (m.ore[i] < 1) { this.hstate = 'seek'; break; }
+        this.cargoKind = G.era === 'ming' ? 'silver' : 'ore';
         const mult = m.oreType[i] === 2 ? 2 : 1;
         const take = Math.min(HARV_RATE * dt, m.ore[i], (HARV_CAP - this.cargo) / mult);
         m.ore[i] -= take; this.cargo += take * mult;
@@ -596,15 +635,31 @@ class Unit {
   findOre() {
     const m = G.map;
     let best = null, bs = 1e9;
+    const gatherEra = ERAS[G.era] && ERAS[G.era].gather;
     const ox = this.htile ? this.htile[0] : this.x, oy = this.htile ? this.htile[1] : this.y;
     const claimed = new Set();
     for (const e of G.entities) if (e !== this && e.alive && e.kind === 'unit' && e.def.harvester && e.htile && (e.hstate === 'toOre' || e.hstate === 'harvest')) claimed.add(e.htile[0] + e.htile[1] * MAP_W);
     for (let i = 0; i < m.ore.length; i++) {
       if (m.ore[i] < 30 || m.bld[i]) continue;
       const x = i % MAP_W, y = (i / MAP_W) | 0;
-      let s = dist(ox, oy, x, y) + (claimed.has(i) ? 6 : 0);
+      let s = dist(ox, oy, x, y) + (claimed.has(i) ? 6 : 0) + (gatherEra && this.pref && this.pref !== 'silver' ? 8 : 0);
       if (s < bs) { bs = s; best = [x, y]; }
     }
+    // 明朝時代:樹林與岩石也可採集(稍微偏好銀礦)
+    if (gatherEra) {
+      for (let i = 0; i < m.res.length; i++) {
+        if (m.res[i] <= 0 || i === this.skip) continue;
+        const x = i % MAP_W, y = (i / MAP_W) | 0;
+        const kind = m.terrain[i] === T_TREE ? 'wood' : 'stone';
+        const pen = kind === this.pref ? 0 : 8;
+        const d0 = dist(ox, oy, x, y);
+        if (d0 + pen >= bs) continue;
+        if (!m.reachableEdge(x, y)) continue;
+        const s = d0 + pen + (claimed.has(i) ? 4 : 0);
+        if (s < bs) { bs = s; best = [x, y]; }
+      }
+    }
+    this.skip = -1;
     return best;
   }
 }

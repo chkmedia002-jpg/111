@@ -6,19 +6,19 @@ Object.assign(FACTIONS, {
     name: '大明', en: 'Great Ming', era: 'ming', color: '#d8382a', beam: '#ff9a30',
     desc: '火器與戚家軍陣法。鳥銃、佛郎機與大將軍砲火力強大,戰車陣穩固難破。',
     units: ['鳥銃手、狼筅長槍兵', '遼東鐵騎、偏廂戰車', '大將軍砲、火龍出水'],
-    names: { conyard: '總兵府', power: '糧倉', refinery: '銀礦冶坊', barracks: '校場', factory: '軍器局', tech: '兵部書院', engineer: '工匠', harvester: '運銀牛車' }
+    names: { conyard: '總兵府', power: '糧倉', refinery: '轉運所', barracks: '校場', factory: '軍器局', tech: '兵部書院', engineer: '工匠', harvester: '運輸牛車' }
   },
   jp: {
     name: '日本', en: 'Toyotomi Japan', era: 'ming', color: '#f0ebdc', beam: '#ff7020',
     desc: '戰國百戰之師。鐵砲足輕齊射,武士近戰無雙,騎馬武者衝鋒迅猛。',
     units: ['鐵砲足輕、武士', '騎馬武者、大筒車', '焙烙投石車、火攻之陣'],
-    names: { conyard: '本丸天守', power: '米藏', refinery: '銀山吹屋', barracks: '足輕長屋', factory: '鍛冶場', tech: '軍學所', engineer: '工匠', harvester: '運銀牛車' }
+    names: { conyard: '本丸天守', power: '米藏', refinery: '蔵屋敷', barracks: '足輕長屋', factory: '鍛冶場', tech: '軍學所', engineer: '工匠', harvester: '運輸牛車' }
   },
   kr: {
     name: '朝鮮', en: 'Joseon', era: 'ming', color: '#2f74dc', beam: '#ffb040',
     desc: '弓術冠絕東亞。華車一次齊射百支神機箭,震天雷可轟塌城牆。',
     units: ['弓手、殺手', '騎射手、華車', '震天雷砲、神機箭陣'],
-    names: { conyard: '統制營', power: '軍倉', refinery: '銀店', barracks: '訓練院', factory: '軍器寺', tech: '承文院', engineer: '工匠', harvester: '運銀牛車' }
+    names: { conyard: '統制營', power: '軍倉', refinery: '物資庫', barracks: '訓練院', factory: '軍器寺', tech: '承文院', engineer: '工匠', harvester: '運輸牛車' }
   }
 });
 FACTIONS.ac.units = ['脈衝步兵、雷射突擊兵', '獵鷹偵察車、赫利俄斯雷射戰車', '日冕光束砲車、天穹軌道雷射'];
@@ -33,7 +33,7 @@ const ERAS = {
   },
   ming: {
     name: '1592 壬辰之役', title: '烽火東亞 <span>1592</span>', factions: ['mg', 'jp', 'kr'], players: 3,
-    power: '糧草', ore: '銀礦', silver: true,
+    power: '糧草', ore: '資源', silver: true, gather: true,
     story: '萬曆二十年,豐臣秀吉渡海出兵朝鮮,意圖假道入明。朝鮮八道烽火連天,大明援軍東渡鴨綠江。三國大軍在朝鮮半島爭奪銀礦與糧道,一場決定東亞命運的大戰就此展開。',
     start: '烽火已燃,全軍備戰'
   }
@@ -47,6 +47,17 @@ function eraText(s) {
   if (list) for (const [a, b] of list) s = s.split(a).join(b);
   return s;
 }
+// 明朝時代可採集的地物資源:木材(樹林)、石材(岩石),運回後換算成銀兩
+const GATHER = {
+  wood:  { rate: 75, value: 1.0, name: '木材', amount: 260 },
+  stone: { rate: 60, value: 1.5, name: '石材', amount: 520 }
+};
+const CARGO_NAME = { silver: '銀礦', wood: '木材', stone: '石材', ore: '稀土' };
+const ERA_DESC = {
+  ming: { refinery: '資源集散處:採集車把銀礦、木材、石材運回這裡換成銀兩。附贈一輛運輸牛車。',
+          harvester: '自動採集銀礦、木材(砍樹)與石材(採石)。右鍵點樹林或岩石可指定採集。' }
+};
+function ddesc(type) { const e = ERA_DESC[G.era]; return (e && e[type]) || getDef(type).desc || ''; }
 function dname(type, faction) {
   const f = FACTIONS[faction];
   return (f && f.names && f.names[type]) || getDef(type).name;

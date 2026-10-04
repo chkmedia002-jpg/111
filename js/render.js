@@ -307,10 +307,13 @@ function buildTerrain() {
   mc.getContext('2d').drawImage(cv, 0, 0, 240, 121);
   R.miniTerrain = mc;
   // 地物
-  R.doodads = [];
+  R.doodads = []; R.doodadAt = new Map(); R.stumps = [];
   for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
     const t = m.terrain[m.idx(x, y)];
-    if (t === T_TREE || t === T_ROCK) R.doodads.push({ kind: 'doodad', t, x: x + 0.5, y: y + 0.5, v: m.variant[m.idx(x, y)] });
+    if (t === T_TREE || t === T_ROCK) {
+      const d = { kind: 'doodad', t, x: x + 0.5, y: y + 0.5, v: m.variant[m.idx(x, y)] };
+      R.doodads.push(d); R.doodadAt.set(m.idx(x, y), d);
+    }
   }
   R.sprites.clear();
   R.fogCv = document.createElement('canvas'); R.fogCv.width = MAP_W; R.fogCv.height = MAP_H;
@@ -695,6 +698,23 @@ function drawAncientStrike(ctx, s) {
   }
 }
 
+function drawStump(ctx, s) {
+  const [x, y] = P(s.x, s.y, 0);
+  if (s.wood) {
+    ell(ctx, x + 1, y + 0.5, 3.2, 1.4, 'rgba(0,0,0,0.3)');
+    ctx.fillStyle = '#5a3c24'; ctx.fillRect(x - 1.6, y - 2.2, 3.2, 2.2);
+    ell(ctx, x, y + 0, 1.6, 0.8, '#5a3c24');
+    ell(ctx, x, y - 2.2, 1.6, 0.8, '#c8a070'); ell(ctx, x, y - 2.2, 0.8, 0.4, '#a07848');
+    for (let k = 0; k < 4; k++) circ(ctx, x + Math.cos(s.v + k * 1.7) * 4, y + Math.sin(s.v + k * 1.7) * 1.6, 0.4, '#7a5a34');
+  } else {
+    for (let k = 0; k < 6; k++) {
+      const a = s.v * 0.7 + k * 1.05, r = 1.5 + (k % 3) * 1.6;
+      const px = x + Math.cos(a) * r * 1.5, py = y + Math.sin(a) * r * 0.6;
+      ell(ctx, px, py, 1.3, 0.8, k % 2 ? '#7d7870' : '#99948b');
+    }
+  }
+}
+
 // ===== 主渲染 =====
 function render() {
   const ctx = R.ctx, m = G.map, p = me();
@@ -720,6 +740,7 @@ function render() {
     }
   }
   drawOre(ctx, x0, y0, x1, y1);
+  for (const s of R.stumps) if (onScreen(s.x, s.y)) drawStump(ctx, s);
   for (const f of G.effects) if (f.k === 'scorch' || f.k === 'corpse' || f.k === 'wreck' || f.k === 'hcorpse') if (onScreen(f.x, f.y)) drawGroundEffect(ctx, f);
   if (UI.placing && UI.hoverTile) drawPlacement(ctx);
 
