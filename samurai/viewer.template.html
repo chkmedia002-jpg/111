@@ -1,0 +1,234 @@
+<title>Crescent Kabuto Samurai</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500&display=swap">
+<style>
+  /* Layout: full-bleed 3D stage, a quiet title block top-left and a control strip bottom-left, like a museum display case label. */
+  :root {
+    --paper: #ecebe6;
+    --paper-deep: #d9d7cf;
+    --ink: #1b1c20;
+    --ink-soft: #5d5e63;
+    --gold: #9a7a2c;
+    --line: rgba(27, 28, 32, 0.16);
+    --display: "Shippori Mincho", "Hiragino Mincho ProN", "Noto Serif CJK TC", serif;
+    --body: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans CJK TC", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #1a1b1f; --paper-deep: #111215; --ink: #ece8dc; --ink-soft: #a29f96; --gold: #d1ad5c;
+      --line: rgba(236, 232, 220, 0.18); color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #1a1b1f; --paper-deep: #111215; --ink: #ece8dc; --ink-soft: #a29f96; --gold: #d1ad5c;
+    --line: rgba(236, 232, 220, 0.18); color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(ellipse at 50% 40%, var(--paper) 0%, var(--paper-deep) 100%);
+    color: var(--ink); font-family: var(--body); overflow: hidden;
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .label {
+    position: fixed; left: 20px; top: calc(16px + env(safe-area-inset-top, 0px));
+    display: grid; gap: 4px; max-width: min(340px, calc(100vw - 40px)); pointer-events: none;
+  }
+  .label h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 1.7rem; letter-spacing: 0.08em; text-wrap: balance; }
+  .label .sub { font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+  .label p { margin: 4px 0 0; font-size: 0.82rem; line-height: 1.6; color: var(--ink-soft); }
+  .controls {
+    position: fixed; left: 20px; right: 20px; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  button {
+    font: 500 0.82rem var(--body); color: var(--ink); background: transparent;
+    border: 1px solid var(--line); border-radius: 2px; padding: 7px 12px; cursor: pointer;
+  }
+  button:hover { border-color: var(--gold); }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  button[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+  .controls .group { display: flex; flex-wrap: wrap; gap: 8px; }
+  .status { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; max-width: calc(100vw - 40px); font-size: 0.9rem; color: var(--ink-soft); text-align: center; }
+  .hint { font-size: 0.75rem; color: var(--ink-soft); margin-left: auto; }
+  @media (max-width: 480px) { .hint { display: none; } .label h1 { font-size: 1.35rem; } }
+</style>
+
+<div id="stage"></div>
+<p id="status" class="status" role="status">載入模型中…（約 11 MB）</p>
+<div class="label">
+  <span class="sub">Rigged 3D model · o-yoroi</span>
+  <h1>三日月の武者</h1>
+  <p>黑漆大鎧、三日月前立、背負旗指物。約 47 萬面、19 根骨骼蒙皮，內含待機、步行、攻擊與參考姿勢動畫。</p>
+</div>
+<div class="controls">
+  <div class="group" role="group" aria-label="動作">
+    <button type="button" data-clip="Idle">待機</button>
+    <button type="button" data-clip="Walk">步行</button>
+    <button type="button" data-clip="Attack">攻擊</button>
+    <button type="button" data-clip="Pose_Reference">參考姿勢</button>
+  </div>
+  <div class="group">
+    <button id="bones" type="button" aria-pressed="false">顯示骨架</button>
+    <button id="rotate" type="button" aria-pressed="false">自動旋轉</button>
+    <button id="front" type="button">正面</button>
+    <button id="side" type="button">側面</button>
+  </div>
+  <span class="hint">拖曳旋轉 · 滾輪縮放 · 右鍵平移</span>
+</div>
+
+<script src="__THREE__/build/three.min.js"></script>
+<script src="__THREE__/examples/js/controls/OrbitControls.js"></script>
+<script src="__THREE__/examples/js/environments/RoomEnvironment.js"></script>
+<script src="__THREE__/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+(function () {
+'use strict';
+const status = document.getElementById('status');
+function fail(msg) { status.hidden = false; status.textContent = '無法顯示模型：' + msg; }
+window.addEventListener('error', (e) => fail(e.message));
+if (typeof THREE === 'undefined' || !THREE.GLTFLoader) { fail('three.js 函式庫沒有載入，請檢查網路後重新整理。'); return; }
+const { OrbitControls, RoomEnvironment, GLTFLoader } = THREE;
+
+const WALK_SPEED = 0.667; // m/s, matches the Walk clip's stride
+
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.physicallyCorrectLights = true;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 50);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.minDistance = 1.2;
+controls.maxDistance = 9;
+controls.autoRotateSpeed = 1.2;
+
+const key = new THREE.DirectionalLight(0xfff4e2, 2.2);
+key.position.set(2.5, 4, 3);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -2, right: 2, top: 3, bottom: -1, near: 0.5, far: 12 });
+key.shadow.bias = -0.0005;
+scene.add(key);
+const rimLight = new THREE.DirectionalLight(0xc8d4ff, 1.0);
+rimLight.position.set(-3, 2.5, -3);
+scene.add(rimLight);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444040, 0.35));
+
+const ground = new THREE.Mesh(new THREE.CircleGeometry(4, 64), new THREE.ShadowMaterial({ opacity: 0.22 }));
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+// floor grid scrolls under the in-place walk so the motion reads as travel
+const CELL = 0.25;
+const grid = new THREE.GridHelper(6, 6 / CELL, 0x8a8a8a, 0x8a8a8a);
+grid.material.transparent = true;
+grid.material.opacity = 0.22;
+grid.position.y = 0.001;
+scene.add(grid);
+
+const views = { ref: [0.6, 1.25, 4.2], front: [0.0, 1.15, 4.4], side: [4.4, 1.2, 0.3] };
+function setView(name) {
+  camera.position.set(...views[name]);
+  controls.target.set(0.05, 0.95, 0);
+  controls.update();
+}
+setView('ref');
+
+// the model sits next to this page: samurai.glb, or a base64 .txt copy where .glb is not served
+const GLB_URL = '__GLB_URL__';
+function b64ToBuffer(text) {
+  const bin = atob(text.trim());
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+fetch(GLB_URL)
+  .then((r) => {
+    if (!r.ok) throw new Error(`模型讀取失敗（${r.status}）`);
+    return GLB_URL.endsWith('.txt') ? r.text().then(b64ToBuffer) : r.arrayBuffer();
+  })
+  .then((buf) => new GLTFLoader().parse(buf, '', start, (e) => fail(e.message || String(e))))
+  .catch((e) => fail(location.protocol === 'file:' ? '請用網頁伺服器開啟（例如 npx serve），瀏覽器不允許從本機檔案讀取模型。' : e.message));
+function start(gltf) {
+const model = gltf.scene;
+model.traverse((o) => {
+  if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; }
+});
+scene.add(model);
+const skeleton = new THREE.SkeletonHelper(model);
+skeleton.visible = false;
+scene.add(skeleton);
+
+const mixer = new THREE.AnimationMixer(model);
+const actions = Object.fromEntries(gltf.animations.map((c) => [c.name, mixer.clipAction(c)]));
+const attack = actions.Attack;
+attack.setLoop(THREE.LoopOnce, 1);
+attack.clampWhenFinished = true;
+
+const clipButtons = [...document.querySelectorAll('[data-clip]')];
+let current = null;
+let loopName = 'Idle'; // what Attack returns to
+function play(name) {
+  const next = actions[name];
+  if (name !== 'Attack') loopName = name;
+  next.reset().setEffectiveWeight(1).play();
+  if (current && current !== next) current.crossFadeTo(next, 0.25, false);
+  current = next;
+  for (const b of clipButtons) b.setAttribute('aria-pressed', String(b.dataset.clip === name));
+}
+mixer.addEventListener('finished', (e) => { if (e.action === attack) play(loopName); });
+for (const b of clipButtons) b.onclick = () => play(b.dataset.clip);
+play('Idle');
+
+function toggle(btn, on) { btn.setAttribute('aria-pressed', String(on)); }
+const bonesBtn = document.getElementById('bones');
+bonesBtn.onclick = () => { skeleton.visible = !skeleton.visible; toggle(bonesBtn, skeleton.visible); };
+const rotateBtn = document.getElementById('rotate');
+rotateBtn.onclick = () => { controls.autoRotate = !controls.autoRotate; toggle(rotateBtn, controls.autoRotate); };
+for (const id of ['front', 'side']) {
+  document.getElementById(id).onclick = () => {
+    controls.autoRotate = false;
+    toggle(rotateBtn, false);
+    setView(id);
+  };
+}
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.fov = w < h ? 44 : 32;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+
+const clock = new THREE.Clock();
+let scroll = 0;
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  mixer.update(dt);
+  scroll = (scroll + dt * WALK_SPEED * actions.Walk.getEffectiveWeight() * (actions.Walk.isRunning() ? 1 : 0)) % CELL;
+  grid.position.z = -scroll;
+  controls.update();
+  renderer.render(scene, camera);
+});
+window.__cam = (p, t) => { controls.autoRotate = false; camera.position.set(...p); controls.target.set(...t); controls.update(); };
+window.__seek = (name, t) => { mixer.stopAllAction(); const a = actions[name]; a.reset().play(); mixer.setTime(t); a.paused = true; current = a; };
+window.__ready = true;
+status.hidden = true;
+}
+})();
+</script>
