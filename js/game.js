@@ -208,7 +208,7 @@ function depleteTile(x, y) {
   m.terrain[i] = wasTree ? T_GRASS : T_DIRT;
   if (R.doodads) R.doodads = R.doodads.filter(d => !(Math.floor(d.x) === x && Math.floor(d.y) === y));
   if (R.doodadAt) R.doodadAt.delete(i);
-  if (R.stumps) R.stumps.push({ x: x + 0.5, y: y + 0.5, wood: wasTree, v: m.variant[i] });
+  if (R.stumps && wasTree) R.stumps.push({ x: x + 0.5, y: y + 0.5, wood: true, v: m.variant[i] });
   sfx(wasTree ? 'treefall' : 'pick', x, y);
 }
 
@@ -936,7 +936,7 @@ function newGame(opts) {
   const seed = opts.seed || (Math.random() * 1e9) | 0;
   G.era = ERAS[opts.era] ? opts.era : '2050';
   const era = ERAS[G.era];
-  G.map = new GameMap(seed, era.players);
+  G.map = new GameMap(seed, era.players, { rockClusters: !!era.gather });
   G.entities = []; G.byId = new Map(); G.nextId = 1; G.effects = []; G.projs = []; G.strikes = []; G.reveals = [];
   G.time = 0; G.over = false; G.sel = []; G.groups = {}; G.difficulty = opts.difficulty;
   const fac = era.factions.includes(opts.faction) ? opts.faction : era.factions[0];

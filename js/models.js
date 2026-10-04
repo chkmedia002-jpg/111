@@ -869,7 +869,13 @@ function drawDoodad(ctx, d) {
   const s = spriteCached(key, 48, 52, 24, 44, (c, ax, ay) => d.t === T_TREE ? paintTree(c, ax, ay, d.v) : paintRock(c, ax, ay, d.v));
   // 被砍伐時搖晃
   const shake = d.hitT && G.time - d.hitT < 0.18 ? Math.sin((G.time - d.hitT) * 60) * (d.t === T_TREE ? 1.2 : 0.4) : 0;
-  ctx.drawImage(s.cv, sx - s.ax + shake, sy - s.ay, s.w, s.h);
+  // 岩石隨開採逐漸縮小(以底部為基準)
+  let sc = 1;
+  if (d.t === T_ROCK && G.map.resMax) {
+    const i = G.map.idx(Math.floor(d.x), Math.floor(d.y)), mx = G.map.resMax[i];
+    if (mx > 0) sc = 0.35 + 0.65 * clamp(G.map.res[i] / mx, 0, 1);
+  }
+  ctx.drawImage(s.cv, sx - s.ax * sc + shake, sy - s.ay * sc, s.w * sc, s.h * sc);
 }
 function paintTree(c, ax, ay, v) {
   const rng = mulberry32(v * 9973 + 17);
@@ -956,6 +962,7 @@ function drawOre(ctx, x0, y0, x1, y1) {
     const v = m.variant[i], amt = m.ore[i] / 800;
     const gem = m.oreType[i] === 2;
     const silver = ERAS[G.era] && ERAS[G.era].silver;
+    if (silver) { drawSilverOre(ctx, cx, cy, v, amt, gem, x, y); continue; }
     const c1 = silver ? (gem ? '#f4cc50' : '#dfe3e8') : gem ? '#6fd8ff' : '#f0b848';
     const c2 = silver ? (gem ? '#9a7418' : '#6e7680') : gem ? '#2a78b0' : '#9a6418';
     const c3 = silver ? '#ffffff' : gem ? '#d8f6ff' : '#ffe8a0';
@@ -974,5 +981,50 @@ function drawOre(ctx, x0, y0, x1, y1) {
       line(ctx, F, T, c3, 0.25);
       if (gem) glow(ctx, T[0], T[1] + h * 0.3, 2.5, silver ? '#ffe080' : '#7fe0ff', 0.35 + 0.2 * Math.sin(G.time * 3 + k + v));
     }
+  }
+}
+
+// 明朝銀礦:深色礦石帶銀脈,夾雜銀錠(元寶);中央金礦為金塊與金錠
+function drawSilverOre(ctx, cx, cy, v, amt, gem, tx, ty) {
+  const metal = gem ? ['#f6d860', '#c8962a', '#fff4c0'] : ['#e4e8ee', '#9aa2ac', '#ffffff'];
+  pushA(ctx, 0.22 * Math.min(1, amt + 0.3));
+  ell(ctx, cx, cy, HW * 0.62, HH * 0.62, gem ? '#5a4a20' : '#33363a');
+  popA(ctx);
+  const n = 2 + Math.floor(amt * 4);
+  for (let k = 0; k < n; k++) {
+    const a = hash(v * 7 + k * 53), b = hash(v * 13 + k * 29);
+    const px = cx + (a - b) * HW * 0.7, py = cy + (a + b - 1) * HH * 0.7;
+    const r = (1.8 + hash(v + k * 3) * 1.8) * (0.7 + amt * 0.4);
+    // 礦石塊
+    ell(ctx, px + 0.4, py + 0.3, r * 1.1, r * 0.5, 'rgba(0,0,0,0.3)');
+    poly(ctx, [[px - r, py], [px - r * 0.6, py - r * 0.9], [px + r * 0.3, py - r * 1.05], [px + r, py - r * 0.3], [px + r * 0.7, py + r * 0.3], [px - r * 0.3, py + r * 0.35]], '#55585e');
+    poly(ctx, [[px - r * 0.6, py - r * 0.9], [px + r * 0.3, py - r * 1.05], [px + r * 0.2, py - r * 0.3], [px - r * 0.5, py - r * 0.25]], '#71757b');
+    // 銀脈
+    ctx.strokeStyle = metal[0]; ctx.lineWidth = 0.45;
+    ctx.beginPath(); ctx.moveTo(px - r * 0.7, py - r * 0.2); ctx.lineTo(px - r * 0.1, py - r * 0.55); ctx.lineTo(px + r * 0.6, py - r * 0.35); ctx.stroke();
+    circ(ctx, px - r * 0.1, py - r * 0.55, 0.35, metal[2]);
+  }
+  // 銀錠(元寶)
+  const ingots = 1 + Math.floor(amt * 2.5);
+  for (let k = 0; k < ingots; k++) {
+    const a = hash(v * 31 + k * 17), b = hash(v * 11 + k * 41);
+    const px = cx + (a - b) * HW * 0.5, py = cy + (a + b - 1) * HH * 0.5 + 0.5;
+    ctx.save(); ctx.translate(px, py); ctx.scale(1.35, 1.35); ctx.translate(-px, -py);
+    ell(ctx, px + 0.3, py + 0.4, 2.4, 0.9, 'rgba(0,0,0,0.3)');
+    ctx.fillStyle = metal[1];
+    ctx.beginPath(); ctx.moveTo(px - 2.4, py - 1.6); ctx.quadraticCurveTo(px - 1.6, py + 0.6, px, py + 0.6); ctx.quadraticCurveTo(px + 1.6, py + 0.6, px + 2.4, py - 1.6);
+    ctx.quadraticCurveTo(px, py - 0.6, px - 2.4, py - 1.6); ctx.fill();
+    ctx.fillStyle = metal[0];
+    ctx.beginPath(); ctx.moveTo(px - 2.4, py - 1.6); ctx.quadraticCurveTo(px, py - 0.5, px + 2.4, py - 1.6); ctx.quadraticCurveTo(px, py - 2.4, px - 2.4, py - 1.6); ctx.fill();
+    ell(ctx, px, py - 1.4, 0.9, 0.5, metal[1]);
+    pix(ctx, px - 1.6, py - 1.9, 0.8, 0.3, metal[2]);
+    ctx.restore();
+  }
+  // 閃光
+  const ph = (G.time * 0.7 + hash(tx * 7 + ty * 13) * 6) % 3;
+  if (ph < 0.25) {
+    const gx = cx + (hash(v) - 0.5) * HW * 0.6, gy = cy - 2 + (hash(v * 3) - 0.5) * HH * 0.6, s = Math.sin(ph / 0.25 * Math.PI) * 2.2;
+    line(ctx, [gx - s, gy], [gx + s, gy], metal[2], 0.35); line(ctx, [gx, gy - s], [gx, gy + s], metal[2], 0.35);
+    glow(ctx, gx, gy, 2.5, metal[0], 0.6);
   }
 }

@@ -24,8 +24,8 @@ function makeNoise(rng, cell) {
 }
 
 class GameMap {
-  constructor(seed, nPlayers = 2) {
-    this.w = MAP_W; this.h = MAP_H; this.n = nPlayers;
+  constructor(seed, nPlayers = 2, opts = {}) {
+    this.w = MAP_W; this.h = MAP_H; this.n = nPlayers; this.rockClusters = !!opts.rockClusters;
     const n = MAP_W * MAP_H;
     this.terrain = new Uint8Array(n);
     this.ore = new Float32Array(n);
@@ -35,6 +35,7 @@ class GameMap {
     this.bld = new Int32Array(n);       // 建築佔用 (entity id)
     this.oreFields = [];
     this.res = new Float32Array(n);     // 樹林木材 / 岩石石材
+    this.resMax = new Float32Array(n);
     this.generate(seed);
   }
   idx(x, y) { return y * MAP_W + x; }
@@ -107,10 +108,28 @@ class GameMap {
         }
       }
     };
+    // 明朝時代:每個基地旁放一群可開採的大岩石(在銀礦的另一側)
+    if (this.rockClusters) {
+      for (const s of sc) {
+        const vx = mid.x - s.x, vy = mid.y - s.y, l = Math.hypot(vx, vy);
+        const ux = vx / l, uy = vy / l, px = -uy, py = ux;
+        const rx = clamp(s.x + ux * 2 + px * 8, 3, MAP_W - 4), ry = clamp(s.y + uy * 2 + py * 8, 3, MAP_H - 4);
+        // 交錯排列,讓每顆岩石旁都有空位可以開採
+        const spots = [[0, 0], [2, 0], [0, 2], [2, 2], [1, -1], [-1, 1]];
+        for (const [ox, oy] of spots) {
+          const x = Math.round(rx + ox), y = Math.round(ry + oy);
+          if (!this.inb(x, y) || near(x + 0.5, y + 0.5, 6)) continue;
+          const i = this.idx(x, y);
+          if (this.oreType[i]) continue;
+          this.terrain[i] = T_ROCK;
+        }
+      }
+    }
     for (let i = 0; i < MAP_W * MAP_H; i++) {
       const t = this.terrain[i];
       if (t === T_TREE) this.res[i] = 200 + (this.variant[i] % 120);
       else if (t === T_ROCK) this.res[i] = 420 + (this.variant[i] % 200);
+      this.resMax[i] = this.res[i];
     }
     for (let i = 1; i < sc.length; i++) ensure(sc[0].x, sc[0].y, sc[i].x, sc[i].y);
     for (const f of fields) for (const s of sc) ensure(s.x, s.y, f.x, f.y);
