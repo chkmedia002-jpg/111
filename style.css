@@ -64,6 +64,15 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090b; col
 .panel h1 { margin: 0 0 10px; font-size: 38px; letter-spacing: 6px; color: #e8edf2; text-shadow: 0 0 12px rgba(120,180,255,.5); }
 .panel h1 span { color: #ff4050; text-shadow: 0 0 14px rgba(255,40,60,.7); }
 .panel h1.win { color: #6f6; } .panel h1.lose { color: #f55; }
+/* 結算表 */
+#end .panel.small { max-width: 640px; }
+#stats { width: 100%; border-collapse: collapse; margin: 6px 0 18px; font-size: 13px; }
+#stats th { color: #8fa0b0; font-weight: normal; padding: 4px 6px; border-bottom: 1px solid #3c4650; white-space: nowrap; }
+#stats td { padding: 6px; border-bottom: 1px solid #222a32; text-align: right; font-variant-numeric: tabular-nums; color: #d8dee4; }
+#stats td:first-child { text-align: left; white-space: nowrap; }
+#stats tr.me td { background: rgba(120,180,255,.08); color: #fff; }
+#stats tr.out td { color: #778; }
+#stats .sw { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(255,255,255,.4); }
 .story { line-height: 1.7; color: #aeb8c2; font-size: 14px; }
 .factions { display: flex; gap: 16px; margin: 16px 0; }
 .faction { flex: 1; border: 2px solid #3c4650; padding: 12px 16px; cursor: pointer; background: #12171c; border-radius: 3px; transition: .15s; }

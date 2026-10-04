@@ -22,7 +22,9 @@ function makePlayer(id, faction, isAI, startIdx) {
     credits: START_CREDITS, incomeMult: 1, queues,
     powerProd: 0, powerUse: 0, lowPower: false,
     bcount: {}, explored: new Uint8Array(N), visible: new Uint8Array(N),
-    defeated: false, lastAttackWarn: -99, ai: null
+    defeated: false, lastAttackWarn: -99, ai: null,
+    // 結算統計
+    stats: { income: 0, units: 0, blds: 0, kills: 0, bkills: 0, lost: 0, blost: 0 }
   };
 }
 
@@ -121,8 +123,9 @@ function updateProduction(p, dt) {
         if (p.id === G.human) { eva('建造完成'); sfx('ready'); }
       } else {
         const u = spawnUnit(p, type);
-        if (!u) { p.credits += d.cost; }
-        else if (p.id === G.human) { eva('單位就緒', true, 'unit_ready'); sfx('ready'); }
+        if (!u) p.credits += d.cost;
+        else p.stats.units++;
+        if (u && p.id === G.human) { eva('單位就緒', true, 'unit_ready'); sfx('ready'); }
       }
     }
   }
@@ -177,6 +180,7 @@ function placeBuilding(p, type, tx, ty, instant) {
   const b = new Building(type, p.id, tx, ty);
   if (b.def.super && p.id !== G.human) eva('警告:偵測到敵方超級武器');
   if (instant) b.prog = 1;
+  else p.stats.blds++;
   addEntity(b);
   const m = G.map;
   for (let y = ty; y < ty + b.h; y++) for (let x = tx; x < tx + b.w; x++) m.bld[m.idx(x, y)] = b.id;
@@ -253,7 +257,8 @@ function giveXp(a, value) {
   }
 }
 
-function damage(t, amount, wh, attacker) {
+// owner:攻擊方玩家(無攻擊單位時,如超級武器)
+function damage(t, amount, wh, attacker, owner) {
   if (!t.alive) return;
   t.hp -= amount * WARHEADS[wh][armorOf(t)] * (t.kind === 'unit' ? vetOf(t).armor : 1);
   t.hitT = G.time;
@@ -266,6 +271,10 @@ function damage(t, amount, wh, attacker) {
   if (p.ai && attacker && attacker.alive) p.ai.onAttacked(t, attacker);
   if (t.hp <= 0) {
     if (attacker && attacker.owner !== t.owner) giveXp(attacker, t.def.cost || 500);
+    const killer = attacker ? attacker.owner : owner;
+    const isB = t.kind === 'bld';
+    if (killer != null && killer !== t.owner) G.players[killer].stats[isB ? 'bkills' : 'kills']++;
+    p.stats[isB ? 'blost' : 'lost']++;
     kill(t); return;
   }
   // 反擊
@@ -278,7 +287,7 @@ function damageArea(x, y, r, dmg, wh, owner, except, attacker) {
   for (const e of G.entities) {
     if (!e.alive || e === except || e.owner === owner) continue;
     const d = e.kind === 'bld' ? distTo({ x, y }, e) : Math.hypot(e.x - x, e.y - y);
-    if (d <= r) damage(e, dmg * (1 - d / r * 0.5), wh, attacker || null);
+    if (d <= r) damage(e, dmg * (1 - d / r * 0.5), wh, attacker || null, owner);
   }
 }
 
@@ -626,7 +635,7 @@ class Unit {
         this.dir = rotateTo(this.dir, Math.PI, 3 * dt);
         const p = G.players[this.owner];
         const amt = Math.min(UNLOAD_RATE * dt, this.cargo);
-        this.cargo -= amt; p.credits += amt * p.incomeMult;
+        this.cargo -= amt; p.credits += amt * p.incomeMult; p.stats.income += amt * p.incomeMult;
         if (this.cargo <= 0.01) { this.cargo = 0; this.hstate = 'seek'; }
         break;
       }

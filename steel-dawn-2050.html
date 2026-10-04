@@ -71,6 +71,15 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090b; col
 .panel h1 { margin: 0 0 10px; font-size: 38px; letter-spacing: 6px; color: #e8edf2; text-shadow: 0 0 12px rgba(120,180,255,.5); }
 .panel h1 span { color: #ff4050; text-shadow: 0 0 14px rgba(255,40,60,.7); }
 .panel h1.win { color: #6f6; } .panel h1.lose { color: #f55; }
+/* 結算表 */
+#end .panel.small { max-width: 640px; }
+#stats { width: 100%; border-collapse: collapse; margin: 6px 0 18px; font-size: 13px; }
+#stats th { color: #8fa0b0; font-weight: normal; padding: 4px 6px; border-bottom: 1px solid #3c4650; white-space: nowrap; }
+#stats td { padding: 6px; border-bottom: 1px solid #222a32; text-align: right; font-variant-numeric: tabular-nums; color: #d8dee4; }
+#stats td:first-child { text-align: left; white-space: nowrap; }
+#stats tr.me td { background: rgba(120,180,255,.08); color: #fff; }
+#stats tr.out td { color: #778; }
+#stats .sw { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(255,255,255,.4); }
 .story { line-height: 1.7; color: #aeb8c2; font-size: 14px; }
 .factions { display: flex; gap: 16px; margin: 16px 0; }
 .faction { flex: 1; border: 2px solid #3c4650; padding: 12px 16px; cursor: pointer; background: #12171c; border-radius: 3px; transition: .15s; }
@@ -185,6 +194,7 @@ body[data-era="ming"] .panel h1 span { color: #ffb040; text-shadow: 0 0 14px rgb
   <div class="panel small">
     <h1>勝利</h1>
     <p></p>
+    <table id="stats"></table>
     <div class="menu-row"><button id="replay">再玩一次</button><button id="again">返回主選單</button></div>
   </div>
 </div>
@@ -964,7 +974,9 @@ function makePlayer(id, faction, isAI, startIdx) {
     credits: START_CREDITS, incomeMult: 1, queues,
     powerProd: 0, powerUse: 0, lowPower: false,
     bcount: {}, explored: new Uint8Array(N), visible: new Uint8Array(N),
-    defeated: false, lastAttackWarn: -99, ai: null
+    defeated: false, lastAttackWarn: -99, ai: null,
+    // 結算統計
+    stats: { income: 0, units: 0, blds: 0, kills: 0, bkills: 0, lost: 0, blost: 0 }
   };
 }
 
@@ -1063,8 +1075,9 @@ function updateProduction(p, dt) {
         if (p.id === G.human) { eva('建造完成'); sfx('ready'); }
       } else {
         const u = spawnUnit(p, type);
-        if (!u) { p.credits += d.cost; }
-        else if (p.id === G.human) { eva('單位就緒', true, 'unit_ready'); sfx('ready'); }
+        if (!u) p.credits += d.cost;
+        else p.stats.units++;
+        if (u && p.id === G.human) { eva('單位就緒', true, 'unit_ready'); sfx('ready'); }
       }
     }
   }
@@ -1119,6 +1132,7 @@ function placeBuilding(p, type, tx, ty, instant) {
   const b = new Building(type, p.id, tx, ty);
   if (b.def.super && p.id !== G.human) eva('警告:偵測到敵方超級武器');
   if (instant) b.prog = 1;
+  else p.stats.blds++;
   addEntity(b);
   const m = G.map;
   for (let y = ty; y < ty + b.h; y++) for (let x = tx; x < tx + b.w; x++) m.bld[m.idx(x, y)] = b.id;
@@ -1195,7 +1209,8 @@ function giveXp(a, value) {
   }
 }
 
-function damage(t, amount, wh, attacker) {
+// owner:攻擊方玩家(無攻擊單位時,如超級武器)
+function damage(t, amount, wh, attacker, owner) {
   if (!t.alive) return;
   t.hp -= amount * WARHEADS[wh][armorOf(t)] * (t.kind === 'unit' ? vetOf(t).armor : 1);
   t.hitT = G.time;
@@ -1208,6 +1223,10 @@ function damage(t, amount, wh, attacker) {
   if (p.ai && attacker && attacker.alive) p.ai.onAttacked(t, attacker);
   if (t.hp <= 0) {
     if (attacker && attacker.owner !== t.owner) giveXp(attacker, t.def.cost || 500);
+    const killer = attacker ? attacker.owner : owner;
+    const isB = t.kind === 'bld';
+    if (killer != null && killer !== t.owner) G.players[killer].stats[isB ? 'bkills' : 'kills']++;
+    p.stats[isB ? 'blost' : 'lost']++;
     kill(t); return;
   }
   // 反擊
@@ -1220,7 +1239,7 @@ function damageArea(x, y, r, dmg, wh, owner, except, attacker) {
   for (const e of G.entities) {
     if (!e.alive || e === except || e.owner === owner) continue;
     const d = e.kind === 'bld' ? distTo({ x, y }, e) : Math.hypot(e.x - x, e.y - y);
-    if (d <= r) damage(e, dmg * (1 - d / r * 0.5), wh, attacker || null);
+    if (d <= r) damage(e, dmg * (1 - d / r * 0.5), wh, attacker || null, owner);
   }
 }
 
@@ -1568,7 +1587,7 @@ class Unit {
         this.dir = rotateTo(this.dir, Math.PI, 3 * dt);
         const p = G.players[this.owner];
         const amt = Math.min(UNLOAD_RATE * dt, this.cargo);
-        this.cargo -= amt; p.credits += amt * p.incomeMult;
+        this.cargo -= amt; p.credits += amt * p.incomeMult; p.stats.income += amt * p.incomeMult;
         if (this.cargo <= 0.01) { this.cargo = 0; this.hstate = 'seek'; }
         break;
       }
@@ -5367,6 +5386,20 @@ function togglePause() {
 }
 function toggleHelp() { $('help').classList.toggle('hidden'); }
 
+// 結算表:每位玩家的收入、生產與戰損
+function renderStats() {
+  const money = ERAS[G.era] && ERAS[G.era].silver ? '採集銀兩' : '採集資金';
+  const cols = [[money, s => Math.round(s.income).toLocaleString()], ['生產單位', s => s.units], ['建造建築', s => s.blds],
+    ['擊殺單位', s => s.kills], ['摧毀建築', s => s.bkills], ['陣亡單位', s => s.lost], ['損失建築', s => s.blost]];
+  let h = '<tr><th>陣營</th>' + cols.map(c => `<th>${c[0]}</th>`).join('') + '</tr>';
+  for (const p of G.players) {
+    const name = FACTIONS[p.faction].name + (p.id === G.human ? '(你)' : '');
+    h += `<tr class="${p.id === G.human ? 'me' : ''}${p.defeated ? ' out' : ''}"><td><span class="sw" style="background:${p.color}"></span>${name}</td>` +
+      cols.map(c => `<td>${c[1](p.stats)}</td>`).join('') + '</tr>';
+  }
+  $('stats').innerHTML = h;
+}
+
 function endGame(win) {
   G.over = true;
   eva(win ? '任務完成' : '任務失敗');
@@ -5374,6 +5407,7 @@ function endGame(win) {
   el.querySelector('h1').textContent = win ? '勝利' : '戰敗';
   el.querySelector('h1').className = win ? 'win' : 'lose';
   el.querySelector('p').textContent = win ? `敵軍基地已被摧毀。作戰時間 ${fmtTime(G.time)}。` : `我方基地已全數淪陷。作戰時間 ${fmtTime(G.time)}。`;
+  renderStats();
   setTimeout(() => el.classList.remove('hidden'), 1500);
 }
 </script>

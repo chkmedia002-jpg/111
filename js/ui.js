@@ -519,6 +519,20 @@ function togglePause() {
 }
 function toggleHelp() { $('help').classList.toggle('hidden'); }
 
+// 結算表:每位玩家的收入、生產與戰損
+function renderStats() {
+  const money = ERAS[G.era] && ERAS[G.era].silver ? '採集銀兩' : '採集資金';
+  const cols = [[money, s => Math.round(s.income).toLocaleString()], ['生產單位', s => s.units], ['建造建築', s => s.blds],
+    ['擊殺單位', s => s.kills], ['摧毀建築', s => s.bkills], ['陣亡單位', s => s.lost], ['損失建築', s => s.blost]];
+  let h = '<tr><th>陣營</th>' + cols.map(c => `<th>${c[0]}</th>`).join('') + '</tr>';
+  for (const p of G.players) {
+    const name = FACTIONS[p.faction].name + (p.id === G.human ? '(你)' : '');
+    h += `<tr class="${p.id === G.human ? 'me' : ''}${p.defeated ? ' out' : ''}"><td><span class="sw" style="background:${p.color}"></span>${name}</td>` +
+      cols.map(c => `<td>${c[1](p.stats)}</td>`).join('') + '</tr>';
+  }
+  $('stats').innerHTML = h;
+}
+
 function endGame(win) {
   G.over = true;
   eva(win ? '任務完成' : '任務失敗');
@@ -526,5 +540,6 @@ function endGame(win) {
   el.querySelector('h1').textContent = win ? '勝利' : '戰敗';
   el.querySelector('h1').className = win ? 'win' : 'lose';
   el.querySelector('p').textContent = win ? `敵軍基地已被摧毀。作戰時間 ${fmtTime(G.time)}。` : `我方基地已全數淪陷。作戰時間 ${fmtTime(G.time)}。`;
+  renderStats();
   setTimeout(() => el.classList.remove('hidden'), 1500);
 }
