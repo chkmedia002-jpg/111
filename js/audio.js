@@ -1,6 +1,6 @@
 'use strict';
 // ===== 合成音效與語音 =====
-const Audio2 = { ctx: null, master: null, on: true, last: {}, noise: null };
+const Audio2 = { ctx: null, master: null, on: true, vol: 0.7, voice: true, last: {}, noise: null };
 
 function audioInit() {
   if (Audio2.ctx) return;
@@ -8,7 +8,7 @@ function audioInit() {
     const AC = window.AudioContext || window.webkitAudioContext;
     Audio2.ctx = new AC();
     Audio2.master = Audio2.ctx.createGain();
-    Audio2.master.gain.value = 0.35;
+    Audio2.master.gain.value = 0.5 * Audio2.vol;
     Audio2.master.connect(Audio2.ctx.destination);
     const len = Audio2.ctx.sampleRate;
     const buf = Audio2.ctx.createBuffer(1, len, Audio2.ctx.sampleRate);
@@ -84,7 +84,7 @@ let _evaVoice = null, _evaLast = {};
 function eva(text, speak = true) {
   text = eraText(text);
   UI.message(text);
-  if (!speak || !Audio2.on || !('speechSynthesis' in window)) return;
+  if (!speak || !Audio2.on || !Audio2.voice || !('speechSynthesis' in window)) return;
   const now = performance.now();
   if (_evaLast[text] && now - _evaLast[text] < 4000) return;
   _evaLast[text] = now;

@@ -37,6 +37,7 @@
       </select>
       <button id="btn-sound" title="音效開關">🔊</button>
       <button id="btn-help" title="操作說明 (F1)">?</button>
+      <button id="btn-menu" title="遊戲選單 (Esc / F10)">☰ 選單</button>
     </div>
     <div id="info"></div>
   </aside>
@@ -66,7 +67,34 @@
   <div class="panel small">
     <h1>勝利</h1>
     <p></p>
-    <button id="again">返回主選單</button>
+    <div class="menu-row"><button id="replay">再玩一次</button><button id="again">返回主選單</button></div>
+  </div>
+</div>
+
+<div id="gmenu" class="overlay hidden">
+  <div class="panel small">
+    <h1>遊戲選單</h1>
+    <div id="gm-main" class="menu-btns">
+      <button id="gm-resume">繼續遊戲</button>
+      <button id="gm-restart">重新開始</button>
+      <button id="gm-settings">設定</button>
+      <button id="gm-help">操作說明</button>
+      <button id="gm-home">回主選單</button>
+    </div>
+    <div id="gm-confirm" class="hidden">
+      <p id="gm-confirm-text"></p>
+      <div class="menu-row"><button id="gm-yes" class="danger">確定</button><button id="gm-no">取消</button></div>
+    </div>
+    <div id="gm-set" class="hidden">
+      <label class="set-row">音效音量 <input type="range" id="set-vol" min="0" max="100" step="5"> <span id="set-vol-v"></span></label>
+      <label class="set-row">語音播報 <input type="checkbox" id="set-voice"></label>
+      <label class="set-row">視角捲動速度 <input type="range" id="set-scroll" min="40" max="250" step="10"> <span id="set-scroll-v"></span></label>
+      <label class="set-row">遊戲速度
+        <select id="set-speed"><option value="0.75">慢速</option><option value="1">正常</option><option value="1.5">快速</option><option value="2">極速</option></select>
+      </label>
+      <div class="menu-row"><button id="gm-set-back">返回</button></div>
+    </div>
+    <p class="hint">遊戲已暫停。按 Esc 繼續。</p>
   </div>
 </div>
 
@@ -91,7 +119,8 @@
       <tr><td>Q / Ctrl + A</td><td>選取畫面中 / 全部戰鬥單位</td></tr>
       <tr><td>X</td><td>停止</td></tr>
       <tr><td>H / 空白鍵</td><td>回到基地 / 跳至最近警報</td></tr>
-      <tr><td>P / Tab / Esc</td><td>暫停 / 切換建造分頁 / 取消</td></tr>
+      <tr><td>P / Tab</td><td>暫停 / 切換建造分頁</td></tr>
+      <tr><td>Esc / F10</td><td>取消目前操作;沒有可取消的操作時開啟遊戲選單(可回主選單)</td></tr>
       <tr><td>側欄左鍵 / 右鍵</td><td>建造(Shift 一次 5 個)/ 暫停、取消</td></tr>
     </table>
     <p class="hint">建築完成後點擊「就緒」圖示,再於地圖上放置。電力不足時生產減速、防禦塔停擺。點任意處關閉。</p>

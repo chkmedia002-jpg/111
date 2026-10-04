@@ -55,10 +55,15 @@ function buildMenu(era) {
 }
 
 function startGame() {
-  audioInit();
   const faction = document.querySelector('.faction.sel').dataset.f;
-  const difficulty = $('difficulty').value;
-  newGame({ faction, difficulty, era: menuEra });
+  launchGame({ faction, difficulty: $('difficulty').value, era: menuEra });
+}
+function launchGame(opts) {
+  audioInit();
+  UI.lastOpts = Object.assign({}, opts);
+  G.paused = false;
+  $('pause').classList.add('hidden');
+  newGame(Object.assign({}, opts));
   buildTerrain();
   initSidebar();
   MM.t = 0;
@@ -81,8 +86,10 @@ window.addEventListener('load', () => {
   });
   buildMenu('2050');
   $('start').onclick = startGame;
-  $('again').onclick = () => { $('end').classList.add('hidden'); $('menu').classList.remove('hidden'); };
-  $('speed').onchange = e => { G.speed = parseFloat(e.target.value); };
+  $('again').onclick = backToMainMenu;
+  $('speed').onchange = e => { G.speed = parseFloat(e.target.value); syncSettingsUI(); saveSettings(); };
+  initGameMenu();
+  $('replay').onclick = () => { $('end').classList.add('hidden'); launchGame(UI.lastOpts); };
   $('pause').onclick = togglePause;
   $('help').onclick = toggleHelp;
   if (window.speechSynthesis) speechSynthesis.getVoices();

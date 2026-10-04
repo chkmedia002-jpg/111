@@ -106,6 +106,22 @@ button#start:hover, button#again:hover { filter: brightness(1.2); }
 .faction { min-width: 180px; }
 body[data-era="ming"] #menu { background: radial-gradient(ellipse at center, #3a1e14 0%, #0a0604 75%); }
 body[data-era="ming"] .panel h1 span { color: #ffb040; text-shadow: 0 0 14px rgba(255,140,40,.7); }
+
+#tools { flex-wrap: wrap; }
+#btn-menu { margin-left: auto; color: #ffd24a !important; border-color: #8a7330 !important; }
+.menu-btns { display: flex; flex-direction: column; gap: 8px; margin: 18px auto 6px; max-width: 260px; }
+.menu-btns button, .menu-row button { background: linear-gradient(#3a434d, #232a31); color: #e8edf2; border: 1px solid #5d6974; padding: 10px 16px;
+  font-size: 16px; letter-spacing: 3px; cursor: pointer; font-family: inherit; border-radius: 3px; }
+.menu-btns button:hover, .menu-row button:hover { border-color: #ffd24a; color: #fff; }
+.menu-btns button:focus-visible, .menu-row button:focus-visible { outline: 2px solid #ffd24a; outline-offset: 2px; }
+#gm-home, .menu-row button.danger { background: linear-gradient(#7a2222, #4a1010); border-color: #c05050; }
+.menu-row { display: flex; gap: 10px; justify-content: center; margin-top: 14px; }
+#gm-confirm p { line-height: 1.6; color: #d8dde2; }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; font-size: 15px; text-align: left; }
+.set-row input[type=range] { flex: 1; accent-color: #ffd24a; }
+.set-row span { width: 44px; text-align: right; color: #ffd24a; font-variant-numeric: tabular-nums; }
+.set-row select { background: #12171c; color: #dde; border: 1px solid #56616c; padding: 4px; font-family: inherit; }
+.set-row input[type=checkbox] { width: 18px; height: 18px; accent-color: #ffd24a; }
 </style>
 </head>
 <body>
@@ -139,6 +155,7 @@ body[data-era="ming"] .panel h1 span { color: #ffb040; text-shadow: 0 0 14px rgb
       </select>
       <button id="btn-sound" title="音效開關">🔊</button>
       <button id="btn-help" title="操作說明 (F1)">?</button>
+      <button id="btn-menu" title="遊戲選單 (Esc / F10)">☰ 選單</button>
     </div>
     <div id="info"></div>
   </aside>
@@ -168,7 +185,34 @@ body[data-era="ming"] .panel h1 span { color: #ffb040; text-shadow: 0 0 14px rgb
   <div class="panel small">
     <h1>勝利</h1>
     <p></p>
-    <button id="again">返回主選單</button>
+    <div class="menu-row"><button id="replay">再玩一次</button><button id="again">返回主選單</button></div>
+  </div>
+</div>
+
+<div id="gmenu" class="overlay hidden">
+  <div class="panel small">
+    <h1>遊戲選單</h1>
+    <div id="gm-main" class="menu-btns">
+      <button id="gm-resume">繼續遊戲</button>
+      <button id="gm-restart">重新開始</button>
+      <button id="gm-settings">設定</button>
+      <button id="gm-help">操作說明</button>
+      <button id="gm-home">回主選單</button>
+    </div>
+    <div id="gm-confirm" class="hidden">
+      <p id="gm-confirm-text"></p>
+      <div class="menu-row"><button id="gm-yes" class="danger">確定</button><button id="gm-no">取消</button></div>
+    </div>
+    <div id="gm-set" class="hidden">
+      <label class="set-row">音效音量 <input type="range" id="set-vol" min="0" max="100" step="5"> <span id="set-vol-v"></span></label>
+      <label class="set-row">語音播報 <input type="checkbox" id="set-voice"></label>
+      <label class="set-row">視角捲動速度 <input type="range" id="set-scroll" min="40" max="250" step="10"> <span id="set-scroll-v"></span></label>
+      <label class="set-row">遊戲速度
+        <select id="set-speed"><option value="0.75">慢速</option><option value="1">正常</option><option value="1.5">快速</option><option value="2">極速</option></select>
+      </label>
+      <div class="menu-row"><button id="gm-set-back">返回</button></div>
+    </div>
+    <p class="hint">遊戲已暫停。按 Esc 繼續。</p>
   </div>
 </div>
 
@@ -193,7 +237,8 @@ body[data-era="ming"] .panel h1 span { color: #ffb040; text-shadow: 0 0 14px rgb
       <tr><td>Q / Ctrl + A</td><td>選取畫面中 / 全部戰鬥單位</td></tr>
       <tr><td>X</td><td>停止</td></tr>
       <tr><td>H / 空白鍵</td><td>回到基地 / 跳至最近警報</td></tr>
-      <tr><td>P / Tab / Esc</td><td>暫停 / 切換建造分頁 / 取消</td></tr>
+      <tr><td>P / Tab</td><td>暫停 / 切換建造分頁</td></tr>
+      <tr><td>Esc / F10</td><td>取消目前操作;沒有可取消的操作時開啟遊戲選單(可回主選單)</td></tr>
       <tr><td>側欄左鍵 / 右鍵</td><td>建造(Shift 一次 5 個)/ 暫停、取消</td></tr>
     </table>
     <p class="hint">建築完成後點擊「就緒」圖示,再於地圖上放置。電力不足時生產減速、防禦塔停擺。點任意處關閉。</p>
@@ -702,7 +747,7 @@ class GameMap {
 <script>
 'use strict';
 // ===== 合成音效與語音 =====
-const Audio2 = { ctx: null, master: null, on: true, last: {}, noise: null };
+const Audio2 = { ctx: null, master: null, on: true, vol: 0.7, voice: true, last: {}, noise: null };
 
 function audioInit() {
   if (Audio2.ctx) return;
@@ -710,7 +755,7 @@ function audioInit() {
     const AC = window.AudioContext || window.webkitAudioContext;
     Audio2.ctx = new AC();
     Audio2.master = Audio2.ctx.createGain();
-    Audio2.master.gain.value = 0.35;
+    Audio2.master.gain.value = 0.5 * Audio2.vol;
     Audio2.master.connect(Audio2.ctx.destination);
     const len = Audio2.ctx.sampleRate;
     const buf = Audio2.ctx.createBuffer(1, len, Audio2.ctx.sampleRate);
@@ -786,7 +831,7 @@ let _evaVoice = null, _evaLast = {};
 function eva(text, speak = true) {
   text = eraText(text);
   UI.message(text);
-  if (!speak || !Audio2.on || !('speechSynthesis' in window)) return;
+  if (!speak || !Audio2.on || !Audio2.voice || !('speechSynthesis' in window)) return;
   const now = performance.now();
   if (_evaLast[text] && now - _evaLast[text] < 4000) return;
   _evaLast[text] = now;
@@ -4769,7 +4814,14 @@ function initInput() {
     UI.keys[ev.key] = true;
     if (!ev.ctrlKey && !ev.metaKey && !ev.altKey) UI.keys[ev.code] = true;
     const k = ev.key;
-    if (k === 'Escape') { UI.placing = null; UI.mode = null; G.sel = []; $('help').classList.add('hidden'); }
+    if (k === 'Escape' || k === 'F10') {
+      ev.preventDefault();
+      if (gameMenuOpen()) { closeGameMenu(); return; }
+      if (k === 'Escape' && !$('help').classList.contains('hidden')) { $('help').classList.add('hidden'); return; }
+      if (k === 'Escape' && (UI.placing || UI.mode || G.sel.length)) { UI.placing = null; UI.mode = null; G.sel = []; return; }
+      openGameMenu();
+    }
+    else if (gameMenuOpen()) return;
     else if (ev.code === 'KeyX') cmdStop(ownSelUnits());
     else if (k === 'h' || k === 'H') { const c = G.entities.find(e => e.alive && e.owner === G.human && e.type === 'conyard') || G.entities.find(e => e.alive && e.owner === G.human); if (c) centerCamera(c.x, c.y); }
     else if (k === ' ') { if (UI.alertAt) centerCamera(UI.alertAt[0], UI.alertAt[1]); ev.preventDefault(); }
@@ -4891,7 +4943,7 @@ function updateHover() {
 }
 
 function updateCamera(dt) {
-  const sp = 700 * dt;
+  const sp = 700 * dt * (UI.scroll || 1);
   let dx = 0, dy = 0;
   const K = UI.keys;
   if (K.ArrowLeft || K.KeyA) dx -= sp; if (K.ArrowRight || K.KeyD) dx += sp;
@@ -4904,8 +4956,78 @@ function updateCamera(dt) {
   if (dx || dy) { R.camX += dx; R.camY += dy; clampCamera(); }
 }
 
+// ===== 遊戲中選單 =====
+function gameMenuOpen() { return !$('gmenu').classList.contains('hidden'); }
+function gmShow(part) {
+  for (const id of ['gm-main', 'gm-confirm', 'gm-set']) $(id).classList.toggle('hidden', id !== part);
+  $('gmenu').querySelector('h1').textContent = part === 'gm-set' ? '設定' : part === 'gm-confirm' ? '確認' : '遊戲選單';
+}
+function openGameMenu() {
+  if (!G.map || G.over) return;
+  UI.menuWasPaused = !!G.paused;
+  G.paused = true;
+  $('pause').classList.add('hidden');
+  UI.placing = null; UI.mode = null; UI.drag = null; UI.keys = {};
+  gmShow('gm-main');
+  $('gmenu').classList.remove('hidden');
+  $('gm-resume').focus();
+  sfx('click');
+}
+function closeGameMenu() {
+  $('gmenu').classList.add('hidden');
+  G.paused = !!UI.menuWasPaused;
+  $('pause').classList.toggle('hidden', !G.paused);
+}
+function gmConfirm(text, action) {
+  $('gm-confirm-text').textContent = text;
+  UI.gmAction = action;
+  gmShow('gm-confirm');
+  $('gm-no').focus();
+}
+function backToMainMenu() {
+  $('gmenu').classList.add('hidden'); $('end').classList.add('hidden'); $('pause').classList.add('hidden'); $('help').classList.add('hidden');
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  G.map = null; G.paused = false; G.over = false; G.sel = [];
+  $('menu').classList.remove('hidden');
+}
+
+// 設定(存在瀏覽器,下次開啟仍保留)
+function loadSettings() {
+  let s = {};
+  try { s = JSON.parse(localStorage.getItem('steelDawnSettings') || '{}'); } catch (e) { s = {}; }
+  Audio2.vol = s.vol ?? 0.7; Audio2.voice = s.voice ?? true; UI.scroll = s.scroll ?? 1; G.speed = s.speed ?? 1;
+}
+function saveSettings() {
+  try { localStorage.setItem('steelDawnSettings', JSON.stringify({ vol: Audio2.vol, voice: Audio2.voice, scroll: UI.scroll, speed: G.speed })); } catch (e) { /* 無法儲存時忽略 */ }
+}
+function syncSettingsUI() {
+  $('set-vol').value = Math.round(Audio2.vol * 100); $('set-vol-v').textContent = Math.round(Audio2.vol * 100) + '%';
+  $('set-voice').checked = Audio2.voice;
+  $('set-scroll').value = Math.round(UI.scroll * 100); $('set-scroll-v').textContent = Math.round(UI.scroll * 100) + '%';
+  $('set-speed').value = String(G.speed); $('speed').value = String(G.speed);
+}
+function initGameMenu() {
+  loadSettings();
+  $('btn-menu').onclick = openGameMenu;
+  $('gm-resume').onclick = closeGameMenu;
+  $('gm-restart').onclick = () => gmConfirm('重新開始這一局?目前的進度會遺失。', () => { $('gmenu').classList.add('hidden'); G.paused = false; launchGame(UI.lastOpts); });
+  $('gm-home').onclick = () => gmConfirm('放棄目前戰局,回到主選單?', backToMainMenu);
+  $('gm-help').onclick = () => { $('help').classList.remove('hidden'); };
+  $('gm-settings').onclick = () => { syncSettingsUI(); gmShow('gm-set'); };
+  $('gm-set-back').onclick = () => gmShow('gm-main');
+  $('gm-yes').onclick = () => { const a = UI.gmAction; UI.gmAction = null; if (a) a(); };
+  $('gm-no').onclick = () => gmShow('gm-main');
+  $('set-vol').oninput = e => { Audio2.vol = e.target.value / 100; if (Audio2.master) Audio2.master.gain.value = 0.5 * Audio2.vol; syncSettingsUI(); saveSettings(); };
+  $('set-vol').onchange = () => sfx('click');
+  $('set-voice').onchange = e => { Audio2.voice = e.target.checked; if (!Audio2.voice && window.speechSynthesis) speechSynthesis.cancel(); saveSettings(); };
+  $('set-scroll').oninput = e => { UI.scroll = e.target.value / 100; syncSettingsUI(); saveSettings(); };
+  $('set-speed').onchange = e => { G.speed = parseFloat(e.target.value); syncSettingsUI(); saveSettings(); };
+  syncSettingsUI();
+}
+
 // ===== 選單 / 結束 / 說明 =====
 function togglePause() {
+  if (gameMenuOpen()) return;
   G.paused = !G.paused;
   $('pause').classList.toggle('hidden', !G.paused);
 }
@@ -4979,10 +5101,15 @@ function buildMenu(era) {
 }
 
 function startGame() {
-  audioInit();
   const faction = document.querySelector('.faction.sel').dataset.f;
-  const difficulty = $('difficulty').value;
-  newGame({ faction, difficulty, era: menuEra });
+  launchGame({ faction, difficulty: $('difficulty').value, era: menuEra });
+}
+function launchGame(opts) {
+  audioInit();
+  UI.lastOpts = Object.assign({}, opts);
+  G.paused = false;
+  $('pause').classList.add('hidden');
+  newGame(Object.assign({}, opts));
   buildTerrain();
   initSidebar();
   MM.t = 0;
@@ -5005,8 +5132,10 @@ window.addEventListener('load', () => {
   });
   buildMenu('2050');
   $('start').onclick = startGame;
-  $('again').onclick = () => { $('end').classList.add('hidden'); $('menu').classList.remove('hidden'); };
-  $('speed').onchange = e => { G.speed = parseFloat(e.target.value); };
+  $('again').onclick = backToMainMenu;
+  $('speed').onchange = e => { G.speed = parseFloat(e.target.value); syncSettingsUI(); saveSettings(); };
+  initGameMenu();
+  $('replay').onclick = () => { $('end').classList.add('hidden'); launchGame(UI.lastOpts); };
   $('pause').onclick = togglePause;
   $('help').onclick = toggleHelp;
   if (window.speechSynthesis) speechSynthesis.getVoices();

@@ -288,7 +288,14 @@ function initInput() {
     UI.keys[ev.key] = true;
     if (!ev.ctrlKey && !ev.metaKey && !ev.altKey) UI.keys[ev.code] = true;
     const k = ev.key;
-    if (k === 'Escape') { UI.placing = null; UI.mode = null; G.sel = []; $('help').classList.add('hidden'); }
+    if (k === 'Escape' || k === 'F10') {
+      ev.preventDefault();
+      if (gameMenuOpen()) { closeGameMenu(); return; }
+      if (k === 'Escape' && !$('help').classList.contains('hidden')) { $('help').classList.add('hidden'); return; }
+      if (k === 'Escape' && (UI.placing || UI.mode || G.sel.length)) { UI.placing = null; UI.mode = null; G.sel = []; return; }
+      openGameMenu();
+    }
+    else if (gameMenuOpen()) return;
     else if (ev.code === 'KeyX') cmdStop(ownSelUnits());
     else if (k === 'h' || k === 'H') { const c = G.entities.find(e => e.alive && e.owner === G.human && e.type === 'conyard') || G.entities.find(e => e.alive && e.owner === G.human); if (c) centerCamera(c.x, c.y); }
     else if (k === ' ') { if (UI.alertAt) centerCamera(UI.alertAt[0], UI.alertAt[1]); ev.preventDefault(); }
@@ -410,7 +417,7 @@ function updateHover() {
 }
 
 function updateCamera(dt) {
-  const sp = 700 * dt;
+  const sp = 700 * dt * (UI.scroll || 1);
   let dx = 0, dy = 0;
   const K = UI.keys;
   if (K.ArrowLeft || K.KeyA) dx -= sp; if (K.ArrowRight || K.KeyD) dx += sp;
@@ -423,8 +430,78 @@ function updateCamera(dt) {
   if (dx || dy) { R.camX += dx; R.camY += dy; clampCamera(); }
 }
 
+// ===== 遊戲中選單 =====
+function gameMenuOpen() { return !$('gmenu').classList.contains('hidden'); }
+function gmShow(part) {
+  for (const id of ['gm-main', 'gm-confirm', 'gm-set']) $(id).classList.toggle('hidden', id !== part);
+  $('gmenu').querySelector('h1').textContent = part === 'gm-set' ? '設定' : part === 'gm-confirm' ? '確認' : '遊戲選單';
+}
+function openGameMenu() {
+  if (!G.map || G.over) return;
+  UI.menuWasPaused = !!G.paused;
+  G.paused = true;
+  $('pause').classList.add('hidden');
+  UI.placing = null; UI.mode = null; UI.drag = null; UI.keys = {};
+  gmShow('gm-main');
+  $('gmenu').classList.remove('hidden');
+  $('gm-resume').focus();
+  sfx('click');
+}
+function closeGameMenu() {
+  $('gmenu').classList.add('hidden');
+  G.paused = !!UI.menuWasPaused;
+  $('pause').classList.toggle('hidden', !G.paused);
+}
+function gmConfirm(text, action) {
+  $('gm-confirm-text').textContent = text;
+  UI.gmAction = action;
+  gmShow('gm-confirm');
+  $('gm-no').focus();
+}
+function backToMainMenu() {
+  $('gmenu').classList.add('hidden'); $('end').classList.add('hidden'); $('pause').classList.add('hidden'); $('help').classList.add('hidden');
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  G.map = null; G.paused = false; G.over = false; G.sel = [];
+  $('menu').classList.remove('hidden');
+}
+
+// 設定(存在瀏覽器,下次開啟仍保留)
+function loadSettings() {
+  let s = {};
+  try { s = JSON.parse(localStorage.getItem('steelDawnSettings') || '{}'); } catch (e) { s = {}; }
+  Audio2.vol = s.vol ?? 0.7; Audio2.voice = s.voice ?? true; UI.scroll = s.scroll ?? 1; G.speed = s.speed ?? 1;
+}
+function saveSettings() {
+  try { localStorage.setItem('steelDawnSettings', JSON.stringify({ vol: Audio2.vol, voice: Audio2.voice, scroll: UI.scroll, speed: G.speed })); } catch (e) { /* 無法儲存時忽略 */ }
+}
+function syncSettingsUI() {
+  $('set-vol').value = Math.round(Audio2.vol * 100); $('set-vol-v').textContent = Math.round(Audio2.vol * 100) + '%';
+  $('set-voice').checked = Audio2.voice;
+  $('set-scroll').value = Math.round(UI.scroll * 100); $('set-scroll-v').textContent = Math.round(UI.scroll * 100) + '%';
+  $('set-speed').value = String(G.speed); $('speed').value = String(G.speed);
+}
+function initGameMenu() {
+  loadSettings();
+  $('btn-menu').onclick = openGameMenu;
+  $('gm-resume').onclick = closeGameMenu;
+  $('gm-restart').onclick = () => gmConfirm('重新開始這一局?目前的進度會遺失。', () => { $('gmenu').classList.add('hidden'); G.paused = false; launchGame(UI.lastOpts); });
+  $('gm-home').onclick = () => gmConfirm('放棄目前戰局,回到主選單?', backToMainMenu);
+  $('gm-help').onclick = () => { $('help').classList.remove('hidden'); };
+  $('gm-settings').onclick = () => { syncSettingsUI(); gmShow('gm-set'); };
+  $('gm-set-back').onclick = () => gmShow('gm-main');
+  $('gm-yes').onclick = () => { const a = UI.gmAction; UI.gmAction = null; if (a) a(); };
+  $('gm-no').onclick = () => gmShow('gm-main');
+  $('set-vol').oninput = e => { Audio2.vol = e.target.value / 100; if (Audio2.master) Audio2.master.gain.value = 0.5 * Audio2.vol; syncSettingsUI(); saveSettings(); };
+  $('set-vol').onchange = () => sfx('click');
+  $('set-voice').onchange = e => { Audio2.voice = e.target.checked; if (!Audio2.voice && window.speechSynthesis) speechSynthesis.cancel(); saveSettings(); };
+  $('set-scroll').oninput = e => { UI.scroll = e.target.value / 100; syncSettingsUI(); saveSettings(); };
+  $('set-speed').onchange = e => { G.speed = parseFloat(e.target.value); syncSettingsUI(); saveSettings(); };
+  syncSettingsUI();
+}
+
 // ===== 選單 / 結束 / 說明 =====
 function togglePause() {
+  if (gameMenuOpen()) return;
   G.paused = !G.paused;
   $('pause').classList.toggle('hidden', !G.paused);
 }
