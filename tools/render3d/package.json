@@ -1,0 +1,6 @@
+{
+  "name": "render3d",
+  "private": true,
+  "description": "把 3D 模型(GLB)渲染成遊戲用的等角精靈畫格",
+  "dependencies": { "three": "0.186.1" }
+}

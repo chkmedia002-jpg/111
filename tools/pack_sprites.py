@@ -8,7 +8,7 @@
   同一組畫格使用共同的裁切框,保留原圖的相對位置,避免播放時抖動。
 """
 import re
-import base64, io, json, os, sys
+import base64, io, json, math, os, sys
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -16,7 +16,7 @@ SRC = os.path.join(ROOT, 'art', 'src')
 OUT = os.path.join(ROOT, 'js', 'sprites_data.js')
 
 # 遊戲中的顯示高度(邏輯像素,從圖的最高點到腳底)。可在檔名對應的條目調整。
-HEIGHT = {'inf': 21, 'inf2': 22, 'light': 30, 'tank': 26, 'art': 28, 'harvester': 24, 'engineer': 19}
+HEIGHT = {'inf': 21, 'inf2': 21, 'light': 30, 'tank': 26, 'art': 28, 'harvester': 24, 'engineer': 19}
 OVERRIDE = {'ming_harvester': 22, 'ming_harvester_side': 15}   # 例:{'jp_inf2': 24}
 # 載具:原圖座標(像素)標出地面中心錨點、車輪(圓心x, 圓心y, 半徑)、車斗(中心, 半長向量, 半寬向量)。
 # 車輪由遊戲程式繪製並依移動距離旋轉;車斗位置用來疊上貨物。
@@ -28,7 +28,7 @@ VEHICLE = {
                             'bed': (1210, 452, (-270, 0), (0, -10)), 'axis': (1, 0)},
 }
 # 沒有靜態圖時,指定用哪一格當站立(待命)姿勢:(狀態, 第幾格,從 1 開始)
-STAND_FRAME = {'jp_inf2': ('walk', 3)}
+STAND_FRAME = {}      # 例:{'jp_inf2': ('walk', 3)}
 PIXELS_PER_UNIT = 12   # 最大縮放時每個邏輯像素對應的圖片像素
 
 
@@ -172,8 +172,38 @@ def process_anim(code, state, frames):
     return {'frames': srcs, 'fps': FPS[state], 'w': round(w * Hl / h, 2), 'h': Hl, 'ax': round(ax * Hl / h, 2), 'ay': Hl}, total
 
 
+DIR_PPU = 8   # 3D 多方向畫格:每個邏輯像素對應的圖片像素(畫格多,解析度略低以控制檔案大小)
+
+
+def process_dirs(folder, code):
+    """3D 渲染的多方向走路畫格(tools/render3d 產生):<方向>_NN.webp + meta.json"""
+    meta = json.load(open(os.path.join(folder, 'meta.json')))
+    # 正交相機俯角 30°、畫面涵蓋 1.24 倍身高:身高在圖上的像素
+    body_px = meta['size'] * math.cos(math.pi / 6) / 1.24
+    kind = code.split('_', 1)[1] if '_' in code else code
+    Hl = OVERRIDE.get(code, HEIGHT.get(kind, 22))
+    k = Hl / body_px                      # 圖片像素 → 邏輯像素
+    cw, ch = meta['crop']
+    entry = {'w': round(cw * k, 2), 'h': round(ch * k, 2), 'ax': round(meta['anchor'][0] * k, 2), 'ay': round(meta['anchor'][1] * k, 2), 'dirs': {}}
+    total = 0
+    for name, d in meta['dirs'].items():
+        files = sorted(f for f in os.listdir(folder) if f.startswith(name + '_'))
+        srcs = []
+        for f in files:
+            src, n = encode(Image.open(os.path.join(folder, f)).convert('RGBA'), k * DIR_PPU); srcs.append(src); total += n
+        entry['dirs'][name] = {'frames': srcs, 'stand': d['stand']}
+    se = entry['dirs'].get('se') or next(iter(entry['dirs'].values()))
+    entry['src'] = se['frames'][se['stand']]
+    return entry, total, len(meta['dirs']), meta['frames']
+
+
 def main():
     data, anims = {}, {}
+    for f in sorted(os.listdir(SRC)):
+        if f.endswith('.dirs') and os.path.isdir(os.path.join(SRC, f)):
+            code = f[:-5]
+            data[code], size, nd, nf = process_dirs(os.path.join(SRC, f), code)
+            print(f'{code}: {nd} 方向 × {nf} 格, {size // 1024} KB')
     pat = re.compile(r'^(.+?)_(' + '|'.join(STATES) + r')(?:_(\d+))?$')
     for f in sorted(os.listdir(SRC)):
         name, ext = os.path.splitext(f)

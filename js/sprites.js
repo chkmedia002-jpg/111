@@ -5,6 +5,14 @@ function _loadImg(src, onok) { const img = new Image(); img.onload = onok; img.s
 for (const [k, d] of Object.entries(typeof SPRITE_DATA !== 'undefined' ? SPRITE_DATA : {})) {
   const s = SPRITES[k] = Object.assign({ ok: false, anims: {} }, d, { anims: {}, key: k });
   s.img = _loadImg(d.src, () => { s.ok = true; });
+  // 3D 渲染的多方向走路畫格
+  if (d.dirs) {
+    s.dirs = {};
+    for (const [name, dd] of Object.entries(d.dirs)) {
+      const set = s.dirs[name] = { stand: dd.stand, imgs: [], loaded: 0 };
+      set.imgs = dd.frames.map(src => _loadImg(src, () => { set.loaded++; }));
+    }
+  }
   for (const [state, a] of Object.entries(d.anims || {})) {
     const an = s.anims[state] = { w: a.w, h: a.h, ax: a.ax, ay: a.ay, fps: a.fps, imgs: [], loaded: 0 };
     an.imgs = a.frames.map(src => _loadImg(src, () => { an.loaded++; }));
@@ -14,6 +22,9 @@ for (const [k, d] of Object.entries(typeof SPRITE_DATA !== 'undefined' ? SPRITE_
 function spriteFor(u) { const s = SPRITES[G.era + '_' + u.type] || SPRITES[u.type]; return s && s.ok ? s : null; }
 function animReady(s, state) { const a = s.anims[state]; return a && a.loaded === a.imgs.length ? a : null; }
 
+// 8 方位 → [畫格組, 是否翻轉](世界方向 0 = 畫面右下,每 45° 一格)
+const DIR8 = [['se', false], ['s', false], ['se', true], ['e', true], ['ne', true], ['n', false], ['ne', false], ['e', false]];
+
 // 原圖面向右下;面向左邊時水平翻轉。
 // walk 依移動距離換格(腳步與地面同步);attack 依攻擊冷卻換格;idle/death 依時間換格。
 function drawSpriteUnit(ctx, u, s) {
@@ -21,8 +32,16 @@ function drawSpriteUnit(ctx, u, s) {
   const fx = Math.cos(u.dir) - Math.sin(u.dir);
   if (fx < -0.1) u._flip = true; else if (fx > 0.1) u._flip = false;
   let flip = !!u._flip;
-  // 載具有正側面圖(代號_side,原圖面向左)時:畫面上橫向或往上走用側面,往下走用斜向
+  // 多方向畫格:依世界方向取最近的 8 方位;左側三個方位用右側畫格水平翻轉
+  let dirSet = null;
+  if (s.dirs) {
+    const k = ((Math.round(u.dir / (Math.PI / 4)) % 8) + 8) % 8;
+    const [name, fl] = DIR8[k];
+    const set = s.dirs[name];
+    if (set && set.loaded === set.imgs.length) { dirSet = set; flip = fl; }
+  }
   const s0 = s;   // 光圈、陰影大小以斜向圖為準,切換視角時不跳動
+  // 載具有正側面圖(代號_side,原圖面向左)時:畫面上橫向或往上走用側面,往下走用斜向
   const side = s.veh && SPRITES[s.key + '_side'];
   if (side && side.ok) {
     const fy = (Math.cos(u.dir) + Math.sin(u.dir)) / 2, len = Math.hypot(fx, fy) || 1;
@@ -34,10 +53,14 @@ function drawSpriteUnit(ctx, u, s) {
   const atk = u.weapon && u.cool > u.weapon.rof - 0.35 ? (u.cool - (u.weapon.rof - 0.35)) / 0.35 : 0;
   // 選擇畫格
   let pic = s, img = s.img, framed = false;
-  const walkA = u.moving && animReady(s, 'walk');
+  const walkA = u.moving && (dirSet ? { imgs: dirSet.imgs } : animReady(s, 'walk'));
   const atkA = atk > 0 && animReady(s, 'attack');
   const idleA = !u.moving && atk === 0 && animReady(s, 'idle');
-  if (atkA) { const n = atkA.imgs.length; pic = atkA; img = atkA.imgs[Math.min(n - 1, Math.floor((1 - atk) * n))]; framed = true; }
+  if (dirSet) {
+    pic = s; framed = true;
+    // anim 每走一格 +6;每 0.55 換一格 → 約 0.7 格走完一個步行循環
+    img = u.moving ? dirSet.imgs[Math.floor((u.anim || 0) / 0.55) % dirSet.imgs.length] : dirSet.imgs[dirSet.stand];
+  } else if (atkA) { const n = atkA.imgs.length; pic = atkA; img = atkA.imgs[Math.min(n - 1, Math.floor((1 - atk) * n))]; framed = true; }
   else if (walkA) { pic = walkA; img = walkA.imgs[Math.floor((u.anim || 0) / 0.75) % walkA.imgs.length]; framed = true; }
   else if (idleA) { pic = idleA; img = idleA.imgs[Math.floor((G.time + (u.id || 0) * 0.37) * idleA.fps) % idleA.imgs.length]; framed = true; }
   // 程式動作:有逐格動畫時減弱,避免動作過度

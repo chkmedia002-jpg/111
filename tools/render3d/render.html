@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+</head><body style="margin:0;background:transparent">
+<script type="module">
+// 等角 2:1 正交相機:俯角 30°、方位 45°。three +X = 遊戲 +x(畫面右下),three +Z = 遊戲 +y(畫面左下)
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const SIZE = 512;
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setSize(SIZE, SIZE); renderer.setClearColor(0x000000, 0);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0xfff4e0, 0x404050, 1.9));
+const sun = new THREE.DirectionalLight(0xffffff, 2.6); sun.position.set(-3, 6, 4); scene.add(sun);   // 與地圖一致:光從左上方來
+const fill = new THREE.DirectionalLight(0xc8d8ff, 0.7); fill.position.set(4, 2, -3); scene.add(fill);
+let cam, model, mixer, clip, H = 2, root = null, root0 = null, feet = [];
+window.init = async (url) => {
+  const g = await new GLTFLoader().loadAsync(url);
+  model = g.scene; scene.add(model);
+  mixer = new THREE.AnimationMixer(model);
+  clip = g.animations[0];
+  mixer.clipAction(clip).play();
+  mixer.setTime(0); model.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(model), sz = box.getSize(new THREE.Vector3());
+  H = sz.y; model.position.y -= box.min.y;
+  model.traverse(o => {
+    if (o.isBone && !root && !(o.parent && o.parent.isBone)) { root = o; root0 = o.position.clone(); }
+    if (o.isBone && /foot/i.test(o.name) && !/toe|end/i.test(o.name)) feet.push(o);
+  });
+  const half = H * 0.62;
+  cam = new THREE.OrthographicCamera(-half, half, half, -half, 0.1, 100);
+  const p = Math.PI / 6, az = Math.PI / 4, d = 20;
+  cam.position.set(Math.sin(az) * Math.cos(p) * d, Math.sin(p) * d + H * 0.45, Math.cos(az) * Math.cos(p) * d);
+  cam.lookAt(0, H * 0.45, 0); cam.updateMatrixWorld(true);
+  // 地面原點在畫面上的位置 = 精靈錨點
+  const o = new THREE.Vector3(0, 0, 0).project(cam);
+  return { anim: clip.name, duration: clip.duration, height: H, root: root && root.name, feet: feet.map(f => f.name),
+           anchor: [(o.x + 1) / 2 * SIZE, (1 - o.y) / 2 * SIZE], size: SIZE };
+};
+// t:動畫進度 0..1;dir:遊戲方向(弧度)。回傳 PNG 與雙腳水平距離(用來挑站立姿勢)
+window.frame = (t, dir) => {
+  mixer.setTime(t * clip.duration);
+  if (root) { root.position.x = root0.x; root.position.z = root0.z; }   // 去掉前進位移,原地踏步
+  model.rotation.y = Math.atan2(Math.cos(dir), Math.sin(dir));
+  model.updateMatrixWorld(true);
+  let spread = 0;
+  if (feet.length >= 2) {
+    const a = feet[0].getWorldPosition(new THREE.Vector3()), b = feet[1].getWorldPosition(new THREE.Vector3());
+    spread = Math.hypot(a.x - b.x, a.z - b.z);
+  }
+  renderer.render(scene, cam);
+  return { png: renderer.domElement.toDataURL('image/png'), spread };
+};
+window.ready = true;
+</script></body></html>

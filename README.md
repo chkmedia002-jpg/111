@@ -81,6 +81,9 @@ js/main.js      主迴圈
 
 動畫畫格命名為 `代號_狀態_01.png`、`代號_狀態_02.png`…(狀態:`idle` 待命、`walk` 步行、`attack` 攻擊、`death` 死亡),或一張橫向排列的精靈圖表 `代號_狀態.png`。步行依移動距離換格,攻擊依攻擊節奏換格。
 
+**3D 模型轉多方向精靈**(如武士 `jp_inf2`):用 Meshy 等工具做出有走路動畫的 GLB,執行
+`cd tools/render3d && npm install && node render.js <模型.glb> jp_inf2 8`,會以遊戲的等角視角渲染 5 個方向 × 8 格到 `art/src/jp_inf2.dirs/`(左側 3 個方向由遊戲翻轉,共 8 方位),並自動挑雙腳最靠攏的一格當站立姿勢;再執行 `python3 tools/pack_sprites.py`。武士原始模型:<https://github.com/chkmedia002-jpg/111/releases/download/124142/Meshy_AI_Samurai_Warrior_biped.zip>(Walking 檔)。
+
 載具(如明朝運輸牛車 `ming_harvester`):給一張沒有車輪的圖,在 `tools/pack_sprites.py` 的 `VEHICLE` 標出地面錨點、車輪圓心與半徑、車斗位置;車輪由程式繪製並依移動距離旋轉,貨物(木材/石材/銀礦)疊在車斗上。代號前加時代(`ming_`)表示只在該時代使用。可再給一張正側面圖 `代號_side`(面向左),橫向或往上走時自動切換成側面,往下走用斜向圖。
 
 建築圖命名為 `陣營_類型.png`(例:`jp_barracks.png`),陣營專屬建築用原代號(例:`jp_turret.png`);圖片會自動對齊地面菱形格子,施工時由下往上長出。
