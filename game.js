@@ -24,51 +24,67 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x8fb4d8);
 scene.fog = new THREE.Fog(0x8fb4d8, 90, 180);
 
-const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 400);
+// 選單用透視鏡頭；遊戲中用固定 45° 等角正交鏡頭（2.5D，類似部落衝突）
+const menuCam = new THREE.PerspectiveCamera(45, 1, 0.5, 400);
+const isoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 600);
+let camera = menuCam;
 const camTarget = new THREE.Vector3();
 let camZoom = 1;
+const ISO_VIEW = 17;                                              // 縮放 1 時畫面半高（世界單位）
+const ISO_OFFSET = new THREE.Vector3(-70, 80, 70);                // 鏡頭相對目標的位置（約 41° 俯角）
+const ISO_RIGHT = new THREE.Vector3(1, 0, 1).normalize();         // 螢幕右方在地面上的方向
+const ISO_UP = new THREE.Vector3(1, 0, -1).normalize();           // 螢幕上方在地面上的方向（朝敵方基地）
+const ZOOM_MIN = 0.5, ZOOM_MAX = 1.6;
 
 scene.add(new THREE.HemisphereLight(0xdde8ff, 0x4a5a2a, 1.1));
 const sun = new THREE.DirectionalLight(0xffffff, 2.2);
 sun.position.set(30, 60, 20);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -75, right: 75, top: 75, bottom: -75, near: 1, far: 160 });
+Object.assign(sun.shadow.camera, { left: -85, right: 85, top: 85, bottom: -85, near: 1, far: 200 });
 sun.shadow.bias = -0.0005;
 scene.add(sun);
 
-// 地面（程式產生草地貼圖）
-function makeGroundTexture() {
+// 地面：外圍深色草地 + 棋盤格戰場（部落衝突風格）
+function makeGrassTexture(base, tiles) {
   const c = document.createElement('canvas');
-  c.width = c.height = 512;
+  c.width = c.height = 256;
   const g = c.getContext('2d');
-  g.fillStyle = '#5d7a3a';
-  g.fillRect(0, 0, 512, 512);
-  for (let i = 0; i < 9000; i++) {
-    const v = 70 + Math.random() * 60;
-    g.fillStyle = `rgba(${v * 0.75 | 0},${v + 30 | 0},${v * 0.4 | 0},0.35)`;
-    g.fillRect(Math.random() * 512, Math.random() * 512, 2 + Math.random() * 4, 2 + Math.random() * 4);
+  const half = 128;
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+    g.fillStyle = tiles && (i + j) % 2 ? base[1] : base[0];
+    g.fillRect(i * half, j * half, half, half);
+  }
+  for (let i = 0; i < 2500; i++) {
+    g.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,200,0.08)' : 'rgba(0,40,0,0.08)';
+    g.fillRect(Math.random() * 256, Math.random() * 256, 2 + Math.random() * 3, 2 + Math.random() * 3);
   }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(10, 10);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
+const outerTex = makeGrassTexture(['#4f7d2c', '#4f7d2c'], false);
+outerTex.repeat.set(40, 40);
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(MAP * 3, MAP * 3),
-  new THREE.MeshStandardMaterial({ map: makeGroundTexture(), roughness: 1 })
+  new THREE.PlaneGeometry(500, 500),
+  new THREE.MeshStandardMaterial({ map: outerTex, roughness: 1 })
 );
 ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.3;
 ground.receiveShadow = true;
 scene.add(ground);
-
-// 地圖邊界
-const border = new THREE.LineLoop(
-  new THREE.BufferGeometry().setFromPoints([[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, z]) => new THREE.Vector3(x * MAP, 0.05, z * MAP))),
-  new THREE.LineBasicMaterial({ color: 0x223311 })
+const fieldTex = makeGrassTexture(['#86c043', '#7bb53b'], true);
+fieldTex.repeat.set(MAP / 4, MAP / 4);                            // 每格 4×4 單位
+const field = new THREE.Mesh(
+  new THREE.BoxGeometry(MAP * 2, 0.3, MAP * 2),
+  [0, 1, 2, 3, 4, 5].map(i => i === 2
+    ? new THREE.MeshStandardMaterial({ map: fieldTex, roughness: 0.95 })
+    : new THREE.MeshStandardMaterial({ color: 0x8a6a3c, roughness: 1 }))
 );
-scene.add(border);
+field.position.y = -0.15;
+field.receiveShadow = true;
+scene.add(field);
 
 // 簡單亂數（固定種子，地形每次相同）
 let seed = 7;
@@ -80,8 +96,8 @@ const obstacles = [];
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5a3a20 });
   const leafMat = new THREE.MeshStandardMaterial({ color: 0x2f5d2a, flatShading: true });
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x777770, flatShading: true });
-  const trunkGeo = new THREE.CylinderGeometry(0.25, 0.35, 1.6, 6);
-  const leafGeo = new THREE.ConeGeometry(1.4, 3.4, 7);
+  const trunkGeo = new THREE.CylinderGeometry(0.18, 0.25, 1.1, 6);
+  const leafGeo = new THREE.ConeGeometry(1.0, 2.4, 7);
   const rockGeo = new THREE.DodecahedronGeometry(1, 0);
   for (let i = 0; i < 70; i++) {
     const x = (rand() * 2 - 1) * (MAP - 3), z = (rand() * 2 - 1) * (MAP - 3);
@@ -91,10 +107,10 @@ const obstacles = [];
     const g = new THREE.Group();
     let r;
     if (rand() < 0.75) {
-      const trunk = new THREE.Mesh(trunkGeo, trunkMat); trunk.position.y = 0.8;
-      const leaf = new THREE.Mesh(leafGeo, leafMat); leaf.position.y = 3;
+      const trunk = new THREE.Mesh(trunkGeo, trunkMat); trunk.position.y = 0.55;
+      const leaf = new THREE.Mesh(leafGeo, leafMat); leaf.position.y = 2.1;
       const s = 0.8 + rand() * 0.6;
-      g.add(trunk, leaf); g.scale.setScalar(s); r = 0.9 * s;
+      g.add(trunk, leaf); g.scale.setScalar(s); r = 0.65 * s;
     } else {
       const rock = new THREE.Mesh(rockGeo, rockMat);
       const s = 0.7 + rand() * 1.0;
@@ -105,6 +121,20 @@ const obstacles = [];
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     scene.add(g);
     obstacles.push({ pos: p, radius: r });
+  }
+  // 戰場外圍的裝飾樹林
+  for (let i = 0; i < 160; i++) {
+    const side = rand() * 4 | 0, t = rand() * 2 - 1, d = MAP + 3 + rand() * 14;
+    const x = side < 2 ? (side ? d : -d) : t * (MAP + 10);
+    const z = side < 2 ? t * (MAP + 10) : (side === 2 ? d : -d);
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat); trunk.position.y = 0.55;
+    const leaf = new THREE.Mesh(leafGeo, leafMat); leaf.position.y = 2.1;
+    g.add(trunk, leaf);
+    g.scale.setScalar(0.9 + rand() * 0.8);
+    g.position.set(x, -0.3, z);
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    scene.add(g);
   }
 }
 
@@ -217,7 +247,7 @@ Promise.all([
 });
 
 // 指揮中心：木石工坊模型，敵方稍微染紅
-const HOUSE_SCALE = 4.4;
+const HOUSE_SCALE = 6;
 const enemyHouseMaterials = new Map();
 function makeHouseModel(team) {
   const obj = houseTemplate.clone();
@@ -503,14 +533,14 @@ class HQ {
     this.kind = 'hq';
     this.team = team;
     this.hp = this.maxHp = HQ_HP;
-    this.radius = 3.9;
+    this.radius = 5.2;
     this.pos = pos.clone();
     this.dead = false;
     this.deadT = 0;
     this.selected = false;
     this.queue = 0;
     this.buildT = 0;
-    this.rally = pos.clone().add(new THREE.Vector3(team === 0 ? 7 : -7, 0, team === 0 ? -7 : 7));
+    this.rally = pos.clone().add(new THREE.Vector3(team === 0 ? 9 : -9, 0, team === 0 ? -9 : 9));
 
     const color = TEAM_COLOR[team];
     const g = new THREE.Group();
@@ -530,11 +560,11 @@ class HQ {
     this.root = g;
     scene.add(g);
 
-    this.selRing = new THREE.Mesh(new THREE.RingGeometry(4.6, 5, 48).rotateX(-Math.PI / 2), selRingMat);
+    this.selRing = new THREE.Mesh(new THREE.RingGeometry(6.2, 6.7, 48).rotateX(-Math.PI / 2), selRingMat);
     this.selRing.position.copy(pos).setY(0.06);
     this.selRing.visible = false;
     scene.add(this.selRing);
-    const teamRing = new THREE.Mesh(new THREE.RingGeometry(4.2, 4.5, 48).rotateX(-Math.PI / 2), teamRingMat[team]);
+    const teamRing = new THREE.Mesh(new THREE.RingGeometry(5.7, 6.0, 48).rotateX(-Math.PI / 2), teamRingMat[team]);
     teamRing.position.copy(pos).setY(0.05);
     scene.add(teamRing);
     this.teamRing = teamRing;
@@ -696,11 +726,13 @@ const game = {
     }
     this.ai = { timer: 0, waveSize: 4, waveTimer: 40 };
     camTarget.copy(BASE_POS[0]).add(new THREE.Vector3(6, 0, -6));
-    camZoom = 0.8;
+    camZoom = 1;
     ui.menu.classList.add('hidden');
     ui.end.classList.add('hidden');
     ui.hud.classList.remove('hidden');
     this.running = true;
+    camera = isoCam;
+    scene.fog = null;
     resize();
     this.flash('擊毀紅色指揮中心！');
   },
@@ -856,7 +888,7 @@ function pickEntity(x, y) {
       for (const h of [0.5, 1.5, 2.5]) {
         const s = worldToScreen(e.pos, h);
         const d = Math.hypot(s.x - x, s.y - y);
-        const tol = 34 / camZoom;
+        const tol = 30 / camZoom;
         if (d < tol && d < bd) { bd = d; best = e; }
       }
     }
@@ -896,7 +928,7 @@ canvas.addEventListener('pointermove', e => {
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pinch && pointers.size === 2) {
     const [a, b] = [...pointers.values()];
-    camZoom = THREE.MathUtils.clamp(pinch.zoom * pinch.d / Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), 0.45, 2.2);
+    camZoom = THREE.MathUtils.clamp(pinch.zoom * pinch.d / Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), ZOOM_MIN, ZOOM_MAX);
     return;
   }
   if (!drag) return;
@@ -969,7 +1001,7 @@ canvas.addEventListener('pointerleave', () => { mouse.inside = false; });
 
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  camZoom = THREE.MathUtils.clamp(camZoom * (1 + Math.sign(e.deltaY) * 0.1), 0.45, 2.2);
+  camZoom = THREE.MathUtils.clamp(camZoom * (1 + Math.sign(e.deltaY) * 0.1), ZOOM_MIN, ZOOM_MAX);
 }, { passive: false });
 
 addEventListener('keydown', e => {
@@ -998,35 +1030,48 @@ document.getElementById('selAllBtn').addEventListener('click', selectAll);
 document.getElementById('stopBtn').addEventListener('click', () => { for (const u of selectedUnits()) u.stop(); });
 ui.amoveBtn.addEventListener('click', () => setAttackMove(!attackMoveMode));
 
-// 小地圖
+// 小地圖（旋轉 45°，與等角視角方向一致，呈菱形）
 const mm = ui.minimap.getContext('2d');
+const MINI_R = MAP * Math.SQRT2;
+function toMini(p) {
+  const W = ui.minimap.width, s = W / (MINI_R * 2);
+  return [(p.x * ISO_RIGHT.x + p.z * ISO_RIGHT.z + MINI_R) * s, (-(p.x * ISO_UP.x + p.z * ISO_UP.z) + MINI_R) * s];
+}
 function drawMinimap() {
   const W = ui.minimap.width;
-  const s = W / (MAP * 2);
-  mm.fillStyle = '#3d5228';
+  mm.fillStyle = '#25381a';
   mm.fillRect(0, 0, W, W);
-  mm.fillStyle = '#2a3a1c';
-  for (const o of obstacles) mm.fillRect((o.pos.x + MAP) * s - 1, (o.pos.z + MAP) * s - 1, 2, 2);
+  mm.fillStyle = '#6fa63a';
+  mm.beginPath();
+  [[-MAP, -MAP], [MAP, -MAP], [MAP, MAP], [-MAP, MAP]].forEach(([x, z], i) => mm[i ? 'lineTo' : 'moveTo'](...toMini({ x, z })));
+  mm.fill();
+  mm.fillStyle = '#3b5a22';
+  for (const o of obstacles) { const [x, y] = toMini(o.pos); mm.fillRect(x - 1, y - 1, 2, 2); }
   for (const e of entities) {
     if (e.dead) continue;
     mm.fillStyle = e.team === 0 ? (e.selected ? '#9f9' : '#4af') : '#f44';
-    const x = (e.pos.x + MAP) * s, z = (e.pos.z + MAP) * s;
-    if (e.kind === 'hq') mm.fillRect(x - 5, z - 5, 10, 10);
-    else mm.fillRect(x - 1.5, z - 1.5, 3, 3);
+    const [x, y] = toMini(e.pos);
+    if (e.kind === 'hq') mm.fillRect(x - 5, y - 5, 10, 10);
+    else mm.fillRect(x - 1.5, y - 1.5, 3, 3);
   }
   // 視野框
   const corners = [[0, 0], [innerWidth, 0], [innerWidth, innerHeight], [0, innerHeight]].map(([x, y]) => screenToGround(x, y));
   if (corners.every(Boolean)) {
     mm.strokeStyle = '#fff';
     mm.beginPath();
-    corners.forEach((p, i) => mm[i ? 'lineTo' : 'moveTo']((p.x + MAP) * s, (p.z + MAP) * s));
+    corners.forEach((p, i) => mm[i ? 'lineTo' : 'moveTo'](...toMini(p)));
     mm.closePath();
     mm.stroke();
   }
 }
 function minimapToWorld(e) {
   const r = ui.minimap.getBoundingClientRect();
-  return new THREE.Vector3(((e.clientX - r.left) / r.width * 2 - 1) * MAP, 0, ((e.clientY - r.top) / r.height * 2 - 1) * MAP);
+  const u = ((e.clientX - r.left) / r.width * 2 - 1) * MINI_R;
+  const v = -((e.clientY - r.top) / r.height * 2 - 1) * MINI_R;
+  const p = ISO_RIGHT.clone().multiplyScalar(u).addScaledVector(ISO_UP, v);
+  p.x = THREE.MathUtils.clamp(p.x, -MAP, MAP);
+  p.z = THREE.MathUtils.clamp(p.z, -MAP, MAP);
+  return p;
 }
 ui.minimap.addEventListener('pointerdown', e => {
   e.preventDefault();
@@ -1040,27 +1085,33 @@ ui.minimap.addEventListener('contextmenu', e => e.preventDefault());
 function updateCamera(dt) {
   if (game.running) {
     const speed = 40 * camZoom * dt;
-    let dx = 0, dz = 0;
-    if (keys.has('arrowup')) dz -= 1;
-    if (keys.has('arrowdown')) dz += 1;
+    let dx = 0, dy = 0;
+    if (keys.has('arrowup')) dy += 1;
+    if (keys.has('arrowdown')) dy -= 1;
     if (keys.has('arrowleft')) dx -= 1;
     if (keys.has('arrowright')) dx += 1;
     const edge = 12;
     if (mouse.inside && !drag && matchMedia('(pointer: fine)').matches) {
       if (mouse.x < edge) dx -= 1;
       if (mouse.x > innerWidth - edge) dx += 1;
-      if (mouse.y < edge) dz -= 1;
-      if (mouse.y > innerHeight - edge) dz += 1;
+      if (mouse.y < edge) dy += 1;
+      if (mouse.y > innerHeight - edge) dy -= 1;
     }
-    camTarget.x = THREE.MathUtils.clamp(camTarget.x + dx * speed, -MAP, MAP);
-    camTarget.z = THREE.MathUtils.clamp(camTarget.z + dz * speed, -MAP, MAP);
-    camera.position.set(camTarget.x, 34 * camZoom, camTarget.z + 24 * camZoom);
-    camera.lookAt(camTarget);
+    camTarget.addScaledVector(ISO_RIGHT, dx * speed).addScaledVector(ISO_UP, dy * speed);
+    camTarget.x = THREE.MathUtils.clamp(camTarget.x, -MAP, MAP);
+    camTarget.z = THREE.MathUtils.clamp(camTarget.z, -MAP, MAP);
+    const aspect = innerWidth / innerHeight, h = ISO_VIEW * camZoom;
+    if (isoCam.top !== h || isoCam.right !== h * aspect) {
+      Object.assign(isoCam, { left: -h * aspect, right: h * aspect, top: h, bottom: -h });
+      isoCam.updateProjectionMatrix();
+    }
+    isoCam.position.copy(camTarget).add(ISO_OFFSET);
+    isoCam.lookAt(camTarget);
   } else {
     // 選單畫面：環繞預覽角色
     const t = performance.now() / 1000;
-    camera.position.set(Math.sin(t * 0.3) * 7, 3.4, Math.cos(t * 0.3) * 7);
-    camera.lookAt(0, 1.6, 0);
+    menuCam.position.set(Math.sin(t * 0.3) * 7, 3.4, Math.cos(t * 0.3) * 7);
+    menuCam.lookAt(0, 1.6, 0);
   }
 }
 
@@ -1089,11 +1140,12 @@ document.getElementById('againBtn').addEventListener('click', () => game.start()
 // ---------- 主迴圈 ----------
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
-  camera.aspect = innerWidth / innerHeight;
+  menuCam.aspect = innerWidth / innerHeight;
   // 選單時把預覽角色推到畫面右側（寬螢幕）
-  if (!game.running && innerWidth > 900) camera.setViewOffset(innerWidth, innerHeight, -innerWidth * 0.22, 0, innerWidth, innerHeight);
-  else camera.clearViewOffset();
-  camera.updateProjectionMatrix();
+  if (innerWidth > 900) menuCam.setViewOffset(innerWidth, innerHeight, -innerWidth * 0.22, 0, innerWidth, innerHeight);
+  else menuCam.clearViewOffset();
+  menuCam.updateProjectionMatrix();
+  isoCam.top = 0; // 下一幀重新計算正交視野
 }
 addEventListener('resize', resize);
 resize();
@@ -1108,5 +1160,5 @@ renderer.setAnimationLoop(() => {
 });
 
 // 供除錯使用
-window.__game = { game, entities: () => entities, camera, camTarget, setSelection, issueCommand, THREE,
+window.__game = { game, entities: () => entities, get camera() { return camera; }, camTarget, setSelection, issueCommand, THREE,
   step(n, dt = 1 / 30) { for (let i = 0; i < n; i++) game.update(dt); } };

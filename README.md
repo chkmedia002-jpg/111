@@ -1,6 +1,6 @@
 # 武士戰線 — 3D 即時戰略 MVP
 
-類似《紅色警戒》的極簡 3D RTS：選擇「武士 Samurai Warrior」角色，訓練部隊、指揮武士攻擊敵軍，摧毀紅色指揮中心即獲勝。
+類似《紅色警戒》的極簡即時戰略，採用部落衝突（Clash of Clans）式 2.5D 等角視角，但角色與建築都是 3D 模型：選擇「武士 Samurai Warrior」角色，訓練部隊、指揮武士攻擊敵軍，摧毀紅色指揮中心即獲勝。
 
 - 引擎：[Three.js](https://threejs.org/)（透過 CDN 載入，無需建置）
 - 角色模型：`assets/samurai.glb`（由 Meshy AI Samurai Warrior 的 Running / Walking 動畫合併並壓縮，約 3MB）
