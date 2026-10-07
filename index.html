@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>武士戰線 MVP</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<!-- 開始畫面：角色選擇 -->
+<div id="menu" class="overlay">
+  <div class="menu-box">
+    <h1>武士戰線</h1>
+    <p class="sub">簡易 3D 即時戰略 MVP</p>
+    <h2>選擇你的角色</h2>
+    <div class="cards">
+      <button class="card selected" data-unit="samurai">
+        <div class="card-name">武士 Samurai Warrior</div>
+        <div class="stats">
+          <span>生命 <b>120</b></span>
+          <span>攻擊 <b>22</b></span>
+          <span>速度 <b>快</b></span>
+          <span>成本 <b>$100</b></span>
+        </div>
+        <div class="card-desc">近戰突擊兵。帶領武士部隊摧毀敵方指揮中心！</div>
+      </button>
+    </div>
+    <h2>對手難度</h2>
+    <div class="diff">
+      <button data-diff="0.7">簡單</button>
+      <button data-diff="1" class="selected">普通</button>
+      <button data-diff="1.4">困難</button>
+    </div>
+    <button id="startBtn" disabled>載入中…</button>
+    <div class="help">
+      <b>操作：</b>左鍵點選／拖曳框選單位 · 右鍵移動或攻擊 · A＋右鍵＝攻擊移動 · 方向鍵／邊緣捲動／中鍵拖曳移動鏡頭 · 空白鍵回基地 · X 停止 · 滾輪縮放 · Q 訓練武士 · Ctrl+A 全選<br>
+      <b>觸控：</b>點單位選取 · 點地面／敵人下達指令 · 單指拖曳移動鏡頭 · 雙指縮放
+    </div>
+  </div>
+</div>
+
+<!-- 遊戲 HUD -->
+<div id="hud" class="hidden">
+  <div id="topbar">
+    <span>💰 <b id="credits">0</b></span>
+    <span>⚔️ 我方 <b id="myCount">0</b></span>
+    <span>👹 敵方 <b id="enemyCount">0</b></span>
+    <span id="msg"></span>
+  </div>
+  <canvas id="minimap" width="160" height="160"></canvas>
+  <div id="panel">
+    <div id="selInfo">未選取</div>
+    <button id="trainBtn"><span>訓練武士</span><small>$100 · Q</small><div class="prog"><i id="trainProg"></i></div><em id="queueCount"></em></button>
+    <div class="row">
+      <button id="selAllBtn">全選</button>
+      <button id="amoveBtn">攻擊移動</button>
+      <button id="stopBtn">停止</button>
+    </div>
+  </div>
+  <div id="selbox"></div>
+</div>
+
+<div id="end" class="overlay hidden">
+  <div class="menu-box">
+    <h1 id="endTitle">勝利！</h1>
+    <p id="endText"></p>
+    <button id="againBtn">再玩一次</button>
+  </div>
+</div>
+
+<script type="module" src="game.js"></script>
+</body>
+</html>
