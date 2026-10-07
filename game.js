@@ -210,7 +210,7 @@ function updateEffects(dt) {
 }
 
 // ---------- 模型載入 ----------
-let template = null, houseTemplate = null, clips = {};
+let template = null, houseTemplate = null, swordTemplate = null, clips = {};
 const enemyMaterials = new Map();
 
 const loader = new GLTFLoader();
@@ -222,13 +222,16 @@ const progress = {};
 function showProgress(name, xhr) {
   if (!xhr.total) return;
   progress[name] = xhr.loaded / xhr.total;
-  const p = Object.values(progress).reduce((a, b) => a + b, 0) / 2;
+  const p = Object.values(progress).reduce((a, b) => a + b, 0) / 3;
   startBtn.textContent = `載入中… ${Math.round(p * 100)}%`;
 }
 Promise.all([
   loadGLB('assets/samurai.glb', x => showProgress('samurai', x)),
   loadGLB('assets/house.glb', x => showProgress('house', x)),
-]).then(([samurai, house]) => {
+  loadGLB('assets/sword.glb', x => showProgress('sword', x)),
+]).then(([samurai, house, sword]) => {
+  swordTemplate = sword.scene;
+  swordTemplate.traverse(o => { if (o.isMesh) o.castShadow = true; });
   template = samurai.scene;
   template.traverse(o => {
     if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; }
@@ -282,7 +285,31 @@ function makeSamuraiModel(team) {
       o.material = enemyMaterials.get(o.material);
     });
   }
+  attachSword(obj);
   return obj;
+}
+
+// 武士刀：模型長約 1.9（沿 Y 軸，刀柄在 -Y 端），握把中心移到原點後掛在右手骨骼上
+const SWORD_MODEL_LEN = 1.9, SWORD_GRIP_Y = -0.76;
+const SWORD_LEN = 1.2;                                   // 遊戲中刀的長度（角色身高約 1.9）
+const SWORD_ROT = new THREE.Euler(0, 0, -Math.PI / 2);   // 相對手骨的方向：刀身朝前上方
+const SWORD_HAND_OFFSET = new THREE.Vector3(0, 0.08, 0.02); // 手骨座標下的握持點（公尺）
+function attachSword(obj) {
+  const hand = findBone(obj, 'RightHand');
+  if (!hand || !swordTemplate) return;
+  obj.updateMatrixWorld(true);
+  const ws = new THREE.Vector3();
+  hand.getWorldScale(ws);
+  const k = obj.scale.x / ws.x;                          // 手骨座標 → 角色公尺的換算
+  const blade = swordTemplate.clone();
+  blade.position.y = -SWORD_GRIP_Y;
+  const pivot = new THREE.Group();
+  pivot.name = 'sword';
+  pivot.add(blade);
+  pivot.scale.setScalar(SWORD_LEN / SWORD_MODEL_LEN * k);
+  pivot.rotation.copy(SWORD_ROT);
+  pivot.position.copy(SWORD_HAND_OFFSET).multiplyScalar(k);
+  hand.add(pivot);
 }
 
 function findBone(root, part) {
@@ -1160,5 +1187,5 @@ renderer.setAnimationLoop(() => {
 });
 
 // 供除錯使用
-window.__game = { game, entities: () => entities, get camera() { return camera; }, camTarget, setSelection, issueCommand, THREE,
+window.__game = { game, scene, entities: () => entities, get camera() { return camera; }, camTarget, setSelection, issueCommand, THREE,
   step(n, dt = 1 / 30) { for (let i = 0; i < n; i++) game.update(dt); } };

@@ -3,7 +3,8 @@
 類似《紅色警戒》的極簡即時戰略，採用部落衝突（Clash of Clans）式 2.5D 等角視角，但角色與建築都是 3D 模型：選擇「武士 Samurai Warrior」角色，訓練部隊、指揮武士攻擊敵軍，摧毀紅色指揮中心即獲勝。
 
 - 引擎：[Three.js](https://threejs.org/)（透過 CDN 載入，無需建置）
-- 角色模型：`assets/samurai.glb`（由 Meshy AI Samurai Warrior 的 Running / Walking 動畫合併並壓縮，約 3MB）
+- 角色模型：`assets/samurai.glb`（由 Meshy AI Stylized Samurai 的 Running / Walking 動畫合併並壓縮，約 2MB）
+- 武士刀模型：`assets/sword.glb`（Meshy AI 武士刀，掛在右手骨骼上，約 230KB）
 - 指揮中心模型：`assets/house.glb`（Meshy AI 木石工坊，減面並壓縮到約 1.7MB）
 
 ## 執行
@@ -41,3 +42,4 @@ python3 -m http.server 8000
 - `game.js` — 遊戲邏輯（單位、AI、戰鬥、輸入、鏡頭、小地圖）
 - `assets/samurai.glb` — 武士模型與動畫
 - `assets/house.glb` — 指揮中心（工坊）模型
+- `assets/sword.glb` — 武士刀模型
