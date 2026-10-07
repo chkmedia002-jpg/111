@@ -4,9 +4,13 @@
 // 方向以遊戲世界角度命名(dir 0 = 畫面右下);左邊三個方向由遊戲水平翻轉。
 const path = require('path'), fs = require('fs');
 const { chromium } = require(require('child_process').execSync('npm root -g').toString().trim() + '/playwright');
-const [glb, code, nArg] = process.argv.slice(2);
-if (!glb || !code) { console.log('用法:node render.js <模型.glb> <代號> [格數]'); process.exit(1); }
+// 選項:--katana 右手持武士刀並渲染斬擊動畫(attack 格數 = --attack=N,預設 6)
+const args = process.argv.slice(2), flags = args.filter(a => a.startsWith('--')), pos = args.filter(a => !a.startsWith('--'));
+const [glb, code, nArg] = pos;
+if (!glb || !code) { console.log('用法:node render.js <模型.glb> <代號> [格數] [--katana] [--attack=6]'); process.exit(1); }
 const N = parseInt(nArg || '8', 10);
+const KATANA = flags.includes('--katana');
+const NA = KATANA ? parseInt((flags.find(f => f.startsWith('--attack=')) || '--attack=6').split('=')[1], 10) : 0;
 const HERE = __dirname, OUT = path.join(HERE, '..', '..', 'art', 'src', code + '.dirs');
 const DIRS = { se: 0, s: Math.PI / 4, e: -Math.PI / 4, ne: -Math.PI / 2, n: -3 * Math.PI / 4 };
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.glb': 'model/gltf-binary' };
@@ -25,7 +29,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.glb': 'model/g
   });
   await pg.goto('http://render.local/render.html');
   await pg.waitForFunction(() => window.ready, null, { timeout: 60000 });
-  const info = await pg.evaluate(() => init('model.glb'));
+  const info = await pg.evaluate(k => init('model.glb', { katana: k }), KATANA);
   console.log(`動畫 ${info.anim}(${info.duration.toFixed(2)} 秒),腳骨 ${info.feet.join(', ')}`);
   const meta = { anchor: info.anchor, size: info.size, frames: N, dirs: {} };
   for (const [name, dir] of Object.entries(DIRS)) {
@@ -36,7 +40,13 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.glb': 'model/g
       if (r.spread < bestSpread) { bestSpread = r.spread; best = f; }
     }
     meta.dirs[name] = { dir, stand: best };
-    console.log(`${name}:${N} 格,站立用第 ${best + 1} 格`);
+    // 斬擊
+    for (let f = 0; f < NA; f++) {
+      const r = await pg.evaluate(([t, d, st]) => attack(t, d, st), [f / NA, dir, best / N]);
+      fs.writeFileSync(path.join(OUT, `atk-${name}_${String(f + 1).padStart(2, '0')}.png`), Buffer.from(r.png.split(',')[1], 'base64'));
+    }
+    if (NA) meta.dirs[name].attack = NA;
+    console.log(`${name}:走路 ${N} 格(站立用第 ${best + 1} 格)${NA ? `,斬擊 ${NA} 格` : ''}`);
   }
   fs.writeFileSync(path.join(OUT, 'meta.json'), JSON.stringify(meta, null, 1));
   await b.close();

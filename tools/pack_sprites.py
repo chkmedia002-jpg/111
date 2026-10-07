@@ -176,7 +176,7 @@ DIR_PPU = 8   # 3D 多方向畫格:每個邏輯像素對應的圖片像素(畫�
 
 
 def process_dirs(folder, code):
-    """3D 渲染的多方向走路畫格(tools/render3d 產生):<方向>_NN.webp + meta.json"""
+    """3D 渲染的多方向畫格(tools/render3d 產生):走路 <方向>_NN.webp、斬擊 atk-<方向>_NN.webp + meta.json"""
     meta = json.load(open(os.path.join(folder, 'meta.json')))
     # 正交相機俯角 30°、畫面涵蓋 1.24 倍身高:身高在圖上的像素
     body_px = meta['size'] * math.cos(math.pi / 6) / 1.24
@@ -184,7 +184,8 @@ def process_dirs(folder, code):
     Hl = OVERRIDE.get(code, HEIGHT.get(kind, 22))
     k = Hl / body_px                      # 圖片像素 → 邏輯像素
     cw, ch = meta['crop']
-    entry = {'w': round(cw * k, 2), 'h': round(ch * k, 2), 'ax': round(meta['anchor'][0] * k, 2), 'ay': round(meta['anchor'][1] * k, 2), 'dirs': {}}
+    entry = {'w': round(cw * k, 2), 'h': round(ch * k, 2), 'ax': round(meta['anchor'][0] * k, 2), 'ay': round(meta['anchor'][1] * k, 2), 'dirs': {},
+             'ring': round(Hl * 0.8, 2)}   # 光圈、陰影寬度依身高,不受刀長影響
     total = 0
     for name, d in meta['dirs'].items():
         files = sorted(f for f in os.listdir(folder) if f.startswith(name + '_'))
@@ -192,6 +193,11 @@ def process_dirs(folder, code):
         for f in files:
             src, n = encode(Image.open(os.path.join(folder, f)).convert('RGBA'), k * DIR_PPU); srcs.append(src); total += n
         entry['dirs'][name] = {'frames': srcs, 'stand': d['stand']}
+        if d.get('attack'):   # 斬擊畫格:atk-<方向>_NN
+            atk = []
+            for f in sorted(f for f in os.listdir(folder) if f.startswith('atk-' + name + '_')):
+                src, n = encode(Image.open(os.path.join(folder, f)).convert('RGBA'), k * DIR_PPU); atk.append(src); total += n
+            entry['dirs'][name]['attack'] = atk
     se = entry['dirs'].get('se') or next(iter(entry['dirs'].values()))
     entry['src'] = se['frames'][se['stand']]
     return entry, total, len(meta['dirs']), meta['frames']

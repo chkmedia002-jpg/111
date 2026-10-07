@@ -14,8 +14,49 @@ const scene = new THREE.Scene();
 scene.add(new THREE.HemisphereLight(0xfff4e0, 0x404050, 1.9));
 const sun = new THREE.DirectionalLight(0xffffff, 2.6); sun.position.set(-3, 6, 4); scene.add(sun);   // 與地圖一致:光從左上方來
 const fill = new THREE.DirectionalLight(0xc8d8ff, 0.7); fill.position.set(4, 2, -3); scene.add(fill);
-let cam, model, mixer, clip, H = 2, root = null, root0 = null, feet = [];
-window.init = async (url) => {
+let cam, model, mixer, clip, H = 2, root = null, root0 = null, feet = [], katana = null, bones = {};
+
+// ===== 武士刀:彎曲刀身(反り)+ 鍔 + 纏柄,刀尖方向為 +X =====
+function makeKatana(scale) {
+  const g = new THREE.Group();
+  const L = 0.72 * scale, W0 = 0.05 * scale, W1 = 0.036 * scale, sori = 0.035 * scale;
+  const sh = new THREE.Shape();
+  const N = 12, back = [], edge = [];
+  for (let i = 0; i <= N; i++) {
+    const s = i / N, x = s * L, y = sori * s * s, w = W0 + (W1 - W0) * s;
+    back.push([x, y + w / 2]); edge.push([x, y - w / 2]);
+  }
+  sh.moveTo(edge[0][0], edge[0][1]);
+  for (const p of edge) sh.lineTo(p[0], p[1]);
+  sh.lineTo(L + W1 * 1.1, sori + W1 * 0.6);             // 切先
+  for (let i = back.length - 1; i >= 0; i--) sh.lineTo(back[i][0], back[i][1]);
+  const blade = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.012 * scale, bevelEnabled: false }),
+    new THREE.MeshStandardMaterial({ color: 0xe8edf2, metalness: 0.9, roughness: 0.22, emissive: 0x6a7480 }));
+  blade.position.z = -0.006 * scale; g.add(blade);
+  const tsuba = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * scale, 0.05 * scale, 0.014 * scale, 16),
+    new THREE.MeshStandardMaterial({ color: 0x3a3020, metalness: 0.7, roughness: 0.4, emissive: 0x1a1408 }));
+  tsuba.rotation.z = Math.PI / 2; g.add(tsuba);
+  const tsuka = new THREE.Mesh(new THREE.CylinderGeometry(0.02 * scale, 0.022 * scale, 0.27 * scale, 10),
+    new THREE.MeshStandardMaterial({ color: 0x1a1c2a, roughness: 0.8 }));
+  tsuka.rotation.z = Math.PI / 2; tsuka.position.x = -0.135 * scale; g.add(tsuka);
+  const kashira = new THREE.Mesh(new THREE.SphereGeometry(0.023 * scale, 10, 8), new THREE.MeshStandardMaterial({ color: 0x8a7030, metalness: 0.8, roughness: 0.4 }));
+  kashira.position.x = -0.27 * scale; g.add(kashira);
+  g.userData.tip = new THREE.Object3D(); g.userData.tip.position.x = L; g.add(g.userData.tip);
+  return g;
+}
+const wp = o => o.getWorldPosition(new THREE.Vector3());
+// 把骨骼轉到讓「目前方向」對準目標方向(世界座標),不管骨骼本身的軸向
+function aim(bone, curDir, target) {
+  const q = new THREE.Quaternion().setFromUnitVectors(curDir.clone().normalize(), target.clone().normalize());
+  const bw = bone.getWorldQuaternion(new THREE.Quaternion());
+  const pw = bone.parent.getWorldQuaternion(new THREE.Quaternion());
+  bone.quaternion.copy(pw.invert().multiply(q.multiply(bw)));
+  bone.updateMatrixWorld(true);
+}
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const lerpDir = (a, b, t) => a.clone().normalize().lerp(b.clone().normalize(), t).normalize();
+
+window.init = async (url, opts = {}) => {
   const g = await new GLTFLoader().loadAsync(url);
   model = g.scene; scene.add(model);
   mixer = new THREE.AnimationMixer(model);
@@ -27,7 +68,24 @@ window.init = async (url) => {
   model.traverse(o => {
     if (o.isBone && !root && !(o.parent && o.parent.isBone)) { root = o; root0 = o.position.clone(); }
     if (o.isBone && /foot/i.test(o.name) && !/toe|end/i.test(o.name)) feet.push(o);
+    if (o.isBone) bones[o.name.replace(/^mixamorig:?/, '')] = o;
   });
+  // 記下每根骨骼的初始姿勢:沒有動畫軌道的骨骼(如脊椎)每格都先還原,避免斬擊的扭轉累積
+  for (const b of Object.values(bones)) b.userData.q0 = b.quaternion.clone();
+  if (opts.katana && bones.RightHand) {
+    // 綁定姿勢(T-pose):右手掌朝下、手指朝 -X、拇指朝 +Z;刀沿拇指方向,稍往手指側傾
+    mixer.stopAllAction(); model.updateMatrixWorld(true);
+    const k = makeKatana(H / 1.9);
+    const hand = bones.RightHand;
+    const fingers = bones.RightHandMiddle1 ? wp(bones.RightHandMiddle1).sub(wp(hand)).normalize() : V(-1, 0, 0);
+    const grip = wp(hand).addScaledVector(fingers, 0.045 * H / 1.9);
+    k.position.copy(grip);
+    const dir = V(0, 0, 1).multiplyScalar(Math.cos(0.45)).addScaledVector(fingers, Math.sin(0.45)).normalize();
+    k.quaternion.setFromUnitVectors(V(1, 0, 0), dir);
+    scene.add(k); k.updateMatrixWorld(true);
+    hand.attach(k); katana = k;
+    mixer.clipAction(clip).play();
+  }
   const half = H * 0.62;
   cam = new THREE.OrthographicCamera(-half, half, half, -half, 0.1, 100);
   const p = Math.PI / 6, az = Math.PI / 4, d = 20;
@@ -39,9 +97,14 @@ window.init = async (url) => {
            anchor: [(o.x + 1) / 2 * SIZE, (1 - o.y) / 2 * SIZE], size: SIZE };
 };
 // t:動畫進度 0..1;dir:遊戲方向(弧度)。回傳 PNG 與雙腳水平距離(用來挑站立姿勢)
+const resetPose = () => { for (const b of Object.values(bones)) b.quaternion.copy(b.userData.q0); };
 window.frame = (t, dir) => {
+  resetPose();
   mixer.setTime(t * clip.duration);
   if (root) { root.position.x = root0.x; root.position.z = root0.z; }   // 去掉前進位移,原地踏步
+  model.rotation.y = 0; model.updateMatrixWorld(true);
+  // 持刀行走:刀尖朝右前下方
+  if (katana) aim(bones.RightHand, wp(katana.userData.tip).sub(wp(katana)), V(-0.25, -0.7, 0.65));
   model.rotation.y = Math.atan2(Math.cos(dir), Math.sin(dir));
   model.updateMatrixWorld(true);
   let spread = 0;
@@ -51,6 +114,38 @@ window.frame = (t, dir) => {
   }
   renderer.render(scene, cam);
   return { png: renderer.domElement.toDataURL('image/png'), spread };
+};
+// ===== 斬擊動畫:以站立姿勢為底,依關鍵影格把上臂、前臂、刀對準指定方向(角色座標:前 +Z、右 -X、上 +Y)=====
+const SLASH = [
+  //  t     上臂               前臂               刀身               脊椎扭轉
+  [0.00, V(-0.6, 0.55, -0.2), V(0.1, 0.95, -0.3), V(0.3, 0.2, -1),   -0.18],   // 舉刀過肩
+  [0.18, V(-0.45, 0.8, 0.1),  V(0.2, 0.9, 0.35),  V(0.15, 0.9, -0.5), -0.12],  // 蓄力最高點
+  [0.38, V(-0.35, 0.3, 0.9),  V(0.1, 0.25, 1),    V(0.05, 0.85, 0.7), 0.02],   // 揮下
+  [0.55, V(-0.15, -0.35, 1),  V(0.15, -0.45, 1),  V(0.15, -0.55, 1),  0.16],   // 斬落
+  [0.75, V(0.15, -0.75, 0.6), V(0.5, -0.75, 0.4), V(0.7, -0.6, 0.35), 0.2],   // 收勢
+];
+window.attack = (t, dir, standT) => {
+  resetPose();
+  mixer.setTime(standT * clip.duration);
+  if (root) { root.position.x = root0.x; root.position.z = root0.z; }
+  model.rotation.y = 0; model.updateMatrixWorld(true);
+  // 站立姿勢的方向(最後回到這個姿勢)
+  const ua0 = wp(bones.RightForeArm).sub(wp(bones.RightArm)), fa0 = wp(bones.RightHand).sub(wp(bones.RightForeArm));
+  const kd0 = V(-0.25, -0.7, 0.65);
+  const keys = SLASH.concat([[1, ua0, fa0, kd0, 0]]);
+  let i = 0; while (i < keys.length - 2 && t > keys[i + 1][0]) i++;
+  const a = keys[i], b = keys[i + 1], f = Math.min(1, Math.max(0, (t - a[0]) / (b[0] - a[0])));
+  const e = f * f * (3 - 2 * f);
+  // 脊椎扭轉與前傾
+  const tw = a[4] + (b[4] - a[4]) * e;
+  for (const n of ['Spine', 'Spine1', 'Spine2']) if (bones[n]) { bones[n].rotateY(tw / 3); bones[n].rotateX(0.04); bones[n].updateMatrixWorld(true); }
+  aim(bones.RightArm, wp(bones.RightForeArm).sub(wp(bones.RightArm)), lerpDir(a[1], b[1], e));
+  aim(bones.RightForeArm, wp(bones.RightHand).sub(wp(bones.RightForeArm)), lerpDir(a[2], b[2], e));
+  aim(bones.RightHand, wp(katana.userData.tip).sub(wp(katana)), lerpDir(a[3], b[3], e));
+  model.rotation.y = Math.atan2(Math.cos(dir), Math.sin(dir));
+  model.updateMatrixWorld(true);
+  renderer.render(scene, cam);
+  return { png: renderer.domElement.toDataURL('image/png') };
 };
 window.ready = true;
 </script></body></html>

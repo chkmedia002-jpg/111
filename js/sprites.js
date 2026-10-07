@@ -9,8 +9,9 @@ for (const [k, d] of Object.entries(typeof SPRITE_DATA !== 'undefined' ? SPRITE_
   if (d.dirs) {
     s.dirs = {};
     for (const [name, dd] of Object.entries(d.dirs)) {
-      const set = s.dirs[name] = { stand: dd.stand, imgs: [], loaded: 0 };
+      const set = s.dirs[name] = { stand: dd.stand, imgs: [], atk: [], loaded: 0 };
       set.imgs = dd.frames.map(src => _loadImg(src, () => { set.loaded++; }));
+      set.atk = (dd.attack || []).map(src => _loadImg(src, () => { set.loaded++; }));
     }
   }
   for (const [state, a] of Object.entries(d.anims || {})) {
@@ -38,7 +39,7 @@ function drawSpriteUnit(ctx, u, s) {
     const k = ((Math.round(u.dir / (Math.PI / 4)) % 8) + 8) % 8;
     const [name, fl] = DIR8[k];
     const set = s.dirs[name];
-    if (set && set.loaded === set.imgs.length) { dirSet = set; flip = fl; }
+    if (set && set.loaded === set.imgs.length + set.atk.length) { dirSet = set; flip = fl; }
   }
   const s0 = s;   // 光圈、陰影大小以斜向圖為準,切換視角時不跳動
   // 載具有正側面圖(代號_side,原圖面向左)時:畫面上橫向或往上走用側面,往下走用斜向
@@ -50,13 +51,19 @@ function drawSpriteUnit(ctx, u, s) {
     if (u._side) { s = side; flip = fx > 0; }
   }
   const sd = flip ? -1 : 1;
-  const atk = u.weapon && u.cool > u.weapon.rof - 0.35 ? (u.cool - (u.weapon.rof - 0.35)) / 0.35 : 0;
+  // 攻擊動作的時間長度:有逐格斬擊時拉長,讓舉刀、斬落、收勢看得清楚
+  const win = u.weapon ? (dirSet && dirSet.atk.length ? Math.min(0.6, u.weapon.rof * 0.65) : 0.35) : 0.35;
+  const atk = u.weapon && u.cool > u.weapon.rof - win ? (u.cool - (u.weapon.rof - win)) / win : 0;
   // 選擇畫格
   let pic = s, img = s.img, framed = false;
   const walkA = u.moving && (dirSet ? { imgs: dirSet.imgs } : animReady(s, 'walk'));
-  const atkA = atk > 0 && animReady(s, 'attack');
+  const atkA = atk > 0 && (dirSet && dirSet.atk.length ? { imgs: dirSet.atk } : animReady(s, 'attack'));
   const idleA = !u.moving && atk === 0 && animReady(s, 'idle');
-  if (dirSet) {
+  if (dirSet && atk > 0 && dirSet.atk.length) {
+    // 斬擊:出手後依冷卻進度播放(舉刀 → 斬落 → 收勢)
+    pic = s; framed = true;
+    img = dirSet.atk[Math.min(dirSet.atk.length - 1, Math.floor((1 - atk) * dirSet.atk.length))];
+  } else if (dirSet) {
     pic = s; framed = true;
     // anim 每走一格 +6;每 0.55 換一格 → 約 0.7 格走完一個步行循環
     img = u.moving ? dirSet.imgs[Math.floor((u.anim || 0) / 0.55) % dirSet.imgs.length] : dirSet.imgs[dirSet.stand];
@@ -72,11 +79,11 @@ function drawSpriteUnit(ctx, u, s) {
   const tilt = atk > 0 && !atkA ? Math.sin(atk * Math.PI) * 0.14 : 0;
   // 陰影與陣營色光圈
   if (s.veh) softShadow(ctx, u.x, u.y, s0.w * 0.5, s0.w * 0.2, 0.45);
-  else softShadow(ctx, u.x, u.y, s.w * 0.42, s.w * 0.17, 0.5);
+  else softShadow(ctx, u.x, u.y, (s0.ring || s.w) * 0.42, (s0.ring || s.w) * 0.17, 0.5);
   const col = G.players[u.owner] ? G.players[u.owner].color : '#fff';
   pushA(ctx, 0.75);
   ctx.strokeStyle = col; ctx.lineWidth = 0.7;
-  ctx.beginPath(); ctx.ellipse(sx, sy, s0.w * 0.36, s0.w * 0.15, 0, 0, 6.2832); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(sx, sy, (s0.ring || s0.w) * 0.36, (s0.ring || s0.w) * 0.15, 0, 0, 6.2832); ctx.stroke();
   popA(ctx);
   ctx.save();
   ctx.translate(sx + sd * lunge, sy - bob);
