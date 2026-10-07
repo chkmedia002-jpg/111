@@ -180,26 +180,63 @@ function updateEffects(dt) {
 }
 
 // ---------- 模型載入 ----------
-let template = null, clips = {};
+let template = null, houseTemplate = null, clips = {};
 const enemyMaterials = new Map();
 
 const loader = new GLTFLoader();
 const startBtn = document.getElementById('startBtn');
-loader.load('assets/samurai.glb', gltf => {
-  template = gltf.scene;
+function loadGLB(url, onProgress) {
+  return new Promise((resolve, reject) => loader.load(url, resolve, onProgress, reject));
+}
+const progress = {};
+function showProgress(name, xhr) {
+  if (!xhr.total) return;
+  progress[name] = xhr.loaded / xhr.total;
+  const p = Object.values(progress).reduce((a, b) => a + b, 0) / 2;
+  startBtn.textContent = `載入中… ${Math.round(p * 100)}%`;
+}
+Promise.all([
+  loadGLB('assets/samurai.glb', x => showProgress('samurai', x)),
+  loadGLB('assets/house.glb', x => showProgress('house', x)),
+]).then(([samurai, house]) => {
+  template = samurai.scene;
   template.traverse(o => {
     if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; }
   });
-  for (const c of gltf.animations) clips[c.name] = c;
+  for (const c of samurai.animations) clips[c.name] = c;
+  houseTemplate = house.scene;
+  houseTemplate.traverse(o => {
+    if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+  });
   startBtn.disabled = false;
   startBtn.textContent = '開始戰鬥';
   showPreview();
-}, xhr => {
-  if (xhr.total) startBtn.textContent = `載入中… ${Math.round(xhr.loaded / xhr.total * 100)}%`;
-}, err => {
+}).catch(err => {
   console.error(err);
   startBtn.textContent = '模型載入失敗';
 });
+
+// 指揮中心：木石工坊模型，敵方稍微染紅
+const HOUSE_SCALE = 4.4;
+const enemyHouseMaterials = new Map();
+function makeHouseModel(team) {
+  const obj = houseTemplate.clone();
+  obj.scale.setScalar(HOUSE_SCALE);
+  const box = new THREE.Box3().setFromObject(obj);
+  obj.position.y = -box.min.y;
+  if (team === 1) {
+    obj.traverse(o => {
+      if (!o.isMesh) return;
+      if (!enemyHouseMaterials.has(o.material)) {
+        const m = o.material.clone();
+        m.color = new THREE.Color(1, 0.62, 0.58);
+        enemyHouseMaterials.set(o.material, m);
+      }
+      o.material = enemyHouseMaterials.get(o.material);
+    });
+  }
+  return obj;
+}
 
 function makeSamuraiModel(team) {
   const obj = SkeletonUtils.clone(template);
@@ -466,7 +503,7 @@ class HQ {
     this.kind = 'hq';
     this.team = team;
     this.hp = this.maxHp = HQ_HP;
-    this.radius = 3.6;
+    this.radius = 3.9;
     this.pos = pos.clone();
     this.dead = false;
     this.deadT = 0;
@@ -477,21 +514,16 @@ class HQ {
 
     const color = TEAM_COLOR[team];
     const g = new THREE.Group();
-    const wall = new THREE.MeshStandardMaterial({ color: 0x8a8378, roughness: 0.9 });
-    const roof = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x333338 });
-    const base = new THREE.Mesh(new THREE.BoxGeometry(6.5, 2.6, 6.5), wall); base.position.y = 1.3;
-    const roof1 = new THREE.Mesh(new THREE.ConeGeometry(5.4, 2.2, 4), roof); roof1.position.y = 3.7; roof1.rotation.y = Math.PI / 4;
-    const tower = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.2, 2.6), wall); tower.position.y = 5.3;
-    const roof2 = new THREE.Mesh(new THREE.ConeGeometry(2.6, 1.6, 4), roof); roof2.position.y = 7.2; roof2.rotation.y = Math.PI / 4;
-    const door = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 0.2), dark);
+    const house = makeHouseModel(team);
     const dir = this.rally.clone().sub(pos).normalize();
-    door.position.set(dir.x * 3.26, 0.9, dir.z * 3.26);
-    door.lookAt(door.position.clone().add(dir));
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3), dark); pole.position.set(0, 9.2, 0);
+    house.rotation.y = Math.atan2(dir.x, dir.z);
+    const top = new THREE.Box3().setFromObject(house).max.y;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3), dark); pole.position.set(0, top + 1.3, 0);
     const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1), new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide }));
-    flag.position.set(0.8, 10.1, 0);
-    g.add(base, roof1, tower, roof2, door, pole, flag);
+    flag.position.set(0.8, top + 2.2, 0);
+    g.add(house, pole, flag);
+    this.flagTop = top;
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     g.position.copy(pos);
     this.flag = flag;
@@ -507,7 +539,7 @@ class HQ {
     scene.add(teamRing);
     this.teamRing = teamRing;
     this.hpBar = makeHpBar(5, team);
-    this.hpBar.position.set(pos.x, 11.5, pos.z);
+    this.hpBar.position.set(pos.x, this.flagTop + 3.6, pos.z);
     scene.add(this.hpBar);
   }
 
